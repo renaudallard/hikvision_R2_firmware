@@ -4,6 +4,15 @@ Unpack, modify, resign, and repack Hikvision IPC R2 series firmware (`digicap.da
 
 Tested on **DS-2CD2420F-IW** (V5.4.800 build 210813). Should work on other IPC R2 models using the SWKH firmware format.
 
+## Firmware modifications
+
+The modified firmware (`modified.dav`) includes these changes:
+
+- **SSH server (dropbear)** on port 22. Key-based authentication only. See [SSH setup](#ssh-setup) below.
+- **Snapshot-based preview page** replacing the broken ActiveX-only live view. Refreshes at ~1fps from `/ISAPI/Streaming/channels/101/picture`. Works in any modern browser.
+- **WiFi watchdog** that pings the gateway every 30s and restarts networking after 3 failures. Disables RTL8188EU power saving (IPS/LPS).
+- **Stripped web UI**: removed 26 non-English translation packs (~4.4MB) and the Windows ActiveX installer (2.4MB).
+
 ## What it does
 
 ```
@@ -74,6 +83,60 @@ curl -u 'admin:PASSWORD' -X PUT \
   "http://CAMERA_IP/ISAPI/System/updateFirmware" \
   --data-binary @modified.dav \
   -H "Content-Type: application/octet-stream"
+```
+
+## SSH setup
+
+The modified firmware runs dropbear SSH on port 22 with key-based authentication only (no passwords).
+
+### Host key
+
+Generated automatically on first boot and stored on the persistent jffs2 partition (`/devinfo/dropbear_rsa_host_key`). Survives reboots.
+
+### Adding your public key
+
+Place your SSH public key in `/devinfo/authorized_keys` on the camera. Methods:
+
+1. **Via existing SSH access**: if you already have shell access, write it directly:
+   ```sh
+   echo "ssh-rsa AAAA..." > /devinfo/authorized_keys
+   ```
+
+2. **Via firmware**: add an `authorized_keys` file to the CramFS and copy it in `initrun.sh`.
+
+3. **Via config import**: use the web UI config backup/restore to inject the file onto the jffs2 partition.
+
+### Connecting
+
+```sh
+ssh root@CAMERA_IP
+```
+
+### Building dropbear from source
+
+The dropbearmulti binary was cross-compiled as a static ARM binary:
+
+```sh
+sudo apt install gcc-arm-linux-gnueabi
+wget https://matt.ucc.asn.au/dropbear/releases/dropbear-2024.86.tar.bz2
+tar xjf dropbear-2024.86.tar.bz2
+cd dropbear-2024.86
+
+# Disable password auth (no crypt() in static build)
+echo '#define DROPBEAR_SVR_PASSWORD_AUTH 0' > localoptions.h
+echo '#define DROPBEAR_CLI_PASSWORD_AUTH 0' >> localoptions.h
+
+./configure --host=arm-linux-gnueabi \
+    --disable-zlib --disable-lastlog --disable-utmp \
+    --disable-utmpx --disable-wtmp --disable-wtmpx \
+    --disable-pututline --disable-pututxline \
+    --enable-static \
+    CC=arm-linux-gnueabi-gcc \
+    CFLAGS="-Os -march=armv5te" LDFLAGS="-static"
+make PROGRAMS="dropbear dropbearkey" MULTI=1 STATIC=1 -j$(nproc)
+arm-linux-gnueabi-strip dropbearmulti
+lzma -9 -k dropbearmulti
+# Copy dropbearmulti.lzma into the CramFS
 ```
 
 ## Firmware format
