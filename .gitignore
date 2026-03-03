@@ -1,0 +1,7 @@
+*.dav
+*.zip
+firmware_extracted/
+firmware_decompiled/
+modified_firmware/
+unpacked/
+__pycache__/
