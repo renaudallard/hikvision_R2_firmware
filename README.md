@@ -56,6 +56,46 @@ vi cramfs_root/initrun.sh
 truncate -s 10747904 unpacked/app.img
 ```
 
+CramFS has a flat structure (all files in root, no subdirectories). The rebuilt image must match the original size exactly (10,747,904 bytes). CramFS reads size from its superblock and ignores trailing zeros, so zero-padding is safe.
+
+`IEfile.tar.gz` contains the web UI. Despite the `.gz` extension, it is LZMA-compressed. Extracted on camera by `tar zxf ... --lzma`. When rebuilding: `tar cf - doc codebase dispatch.asp favicon.ico index.asp | lzma -9 > IEfile.tar.gz`. Do NOT use `tar cf - .` as the `./` prefix in paths breaks the web server.
+
+### Freeing space in the CramFS
+
+The CramFS image is fixed-size (10,747,904 bytes). To add new files (e.g. a custom dropbear binary), you need to free space first. Candidates:
+
+| File | Size | Description |
+|------|------|-------------|
+| `WebComponents.exe` | 2.4 MB | ActiveX installer for IE. Useless on modern browsers. Safe to delete. |
+| `IEfile.tar.gz` translations | ~300 KB | 26 non-English language packs in `doc/i18n/`. English is NOT in this directory (it comes from `IElang.tar`). Delete the language directories and update `doc/i18n/Languages.json` to `{"Languages":[{"isDefault":true,"name":"English","value":"en"}]}` |
+| `codebase/version.xml` | small | ActiveX version checker. Safe to delete. |
+
+To strip translations from IEfile.tar.gz:
+
+```sh
+# Extract
+mkdir IEfile_work
+cd IEfile_work
+tar xf /path/to/cramfs_root/IEfile.tar.gz --lzma
+
+# Remove all non-English translations
+rm -rf doc/i18n/bg doc/i18n/cs doc/i18n/da doc/i18n/de doc/i18n/el \
+       doc/i18n/et doc/i18n/fi doc/i18n/fr doc/i18n/hr doc/i18n/hu \
+       doc/i18n/it doc/i18n/ja doc/i18n/ko doc/i18n/nl doc/i18n/no \
+       doc/i18n/pl doc/i18n/pt doc/i18n/ro doc/i18n/sk doc/i18n/sl \
+       doc/i18n/sr doc/i18n/sv doc/i18n/th doc/i18n/tr doc/i18n/vi \
+       doc/i18n/zh_TW
+
+# Set English-only in language dropdown
+echo '{"Languages":[{"isDefault":true,"name":"English","value":"en"}]}' > doc/i18n/Languages.json
+
+# Remove ActiveX version checker
+rm -f codebase/version.xml
+
+# Repack (LZMA, not gzip)
+tar cf - doc codebase dispatch.asp favicon.ico index.asp | lzma -9 > ../cramfs_root/IEfile.tar.gz
+```
+
 ### Repack (with automatic resign)
 
 ```sh
@@ -77,206 +117,7 @@ curl -u 'admin:PASSWORD' -X PUT \
   -H "Content-Type: application/octet-stream"
 ```
 
-## Hardware details
-
-| Field | Value |
-|-------|-------|
-| Model | DS-2CD2420F-IW |
-| SoC | HiSilicon Hi3518E |
-| Architecture | ARM 32-bit (ARMv5TE) |
-| Kernel | Linux 3.0.8 |
-| C library | uClibc 0.9.32.1 |
-| WiFi chipset | Realtek RTL8188EU (USB) |
-| WiFi driver | 8188eu.ko |
-| Root shell | `/bin/psh` (custom shell, not standard sh) |
-| Root password hash | `ToCOv8qxP13qs` (DES crypt in `/etc/passwd`) |
-
-## Boot sequence
-
-Understanding the boot process is critical for modifications:
-
-1. **u-boot** loads uImage from MTD kernel partition
-2. **Kernel** decompresses, mounts initramfs (embedded in uImage as gzip cpio)
-3. **`/etc/init.d/rcS`** runs:
-   - Mounts `/proc`, `/sys`, `/home` (ramfs)
-   - `iptables -A INPUT -p tcp --dport 22 -j DROP` (blocks SSH by default)
-   - Calls `/etc/app`
-4. **`/etc/app`** runs:
-   - Starts udev
-   - **Starts `/sbin/dropbear -R -I 1800`** (system SSH server, runs before anything else)
-   - Mounts CramFS from `/dev/mtdblock5` to `/mnt`
-   - Copies `initrun.sh` from CramFS to `/home/`
-   - Runs `/home/initrun.sh`
-5. **`initrun.sh`** (from CramFS, the main customization point):
-   - Sets up network interfaces
-   - Mounts CramFS to `/dav`
-   - Decompresses and installs binaries
-   - Mounts jffs2 config partition at `/devinfo`
-   - Loads kernel modules
-   - Starts `execSystemCmd`, `daemon_fsp_app`, `database_process`, `net_process`
-   - Extracts web UI (IEfile.tar.gz) to `/home/webLib`
-
-Key implications:
-- The initramfs is in RAM (ramfs), so `/sbin/dropbear` can be overwritten at runtime
-- `/sbin/dropbear` starts BEFORE `initrun.sh` runs. You cannot prevent it from starting.
-- `/var/run` does not exist when dropbear starts, so no PID file is created
-- To replace dropbear at runtime: kill by process name, `rm` the old binary (ETXTBSY prevents `cp` over a running binary), then `cp` the new one
-
-## Initramfs contents
-
-The kernel initramfs (embedded in uImage) contains the rootfs. Key contents:
-
-```
-/bin/busybox          - Standard utilities (ls, cp, ps, kill, tar, gzip, lzma, etc.)
-/bin/psh              - Custom HiSilicon shell (root's login shell)
-/sbin/dropbear        - SSH server (dropbear 2016.74, dynamically linked against uClibc)
-/sbin/dropbearkey     - (not present by default, can be symlinked)
-/sbin/iptables        - Firewall management
-/sbin/ip6tables       - IPv6 firewall
-/sbin/xtables-multi   - Underlying iptables binary
-/lib/libuClibc-*      - uClibc C library
-/lib/libcrypt-*       - Used by busybox
-/lib/libm-*           - Used by busybox, xtables
-/lib/libz-*           - Only used by old dropbear (removable if dropbear is replaced with static build)
-/lib/libstdc++-*      - Unused (removable)
-/lib/libpthread-*     - Unused (removable)
-/lib/libgcc_s-*       - Unused (removable)
-/etc/passwd           - root:ToCOv8qxP13qs:0:0:root:/root/:/bin/psh
-/etc/init.d/rcS       - Init script
-/etc/app              - Application startup script
-```
-
-## MTD partition layout
-
-| Partition | Mount point | Filesystem | Description |
-|-----------|-------------|------------|-------------|
-| mtdblock5 | `/dav` (also `/mnt` briefly) | CramFS (read-only) | Application filesystem |
-| mtdblock6 | `/devinfo` | jffs2 (read-write) | Persistent configuration |
-
-The jffs2 partition at `/devinfo` survives firmware updates and stores:
-- `ipc_db` - SQLite database with device configuration
-- `dropbear_*_host_key` - SSH host keys (if SSH was enabled)
-- `authorized_keys` - SSH public keys (optional override)
-
-## SSH and the firewall
-
-SSH access involves two components:
-
-### 1. Firewall (iptables)
-
-Port 22 is **blocked by default** in `/etc/init.d/rcS`:
-```sh
-iptables -A INPUT -p tcp --dport 22 -j DROP
-```
-
-`net_process` manages the firewall at runtime based on the SQLite database at `/devinfo/ipc_db`. The `security_config` table has an `ssh_enable` field. When `ssh_enable=1`, `net_process` removes the DROP rule for port 22.
-
-To set this flag, a static ARM binary (`ssh_enable`) is needed that opens the database and runs:
-```sql
-UPDATE security_config SET ssh_enable=1 WHERE idx=1;
-```
-
-This must run BEFORE `net_process` starts, as `net_process` reads the value at startup.
-
-There is no standalone `iptables` binary usable from initrun.sh. The `/sbin/iptables` in the initramfs is available, but by the time `net_process` configures the firewall, any manual iptables rules may be overwritten.
-
-### 2. Dropbear SSH server
-
-The system dropbear (2016.74) is started by `/etc/app` before `initrun.sh` runs. To replace it with a newer version:
-
-```sh
-# In initrun.sh:
-# 1. Decompress new dropbear from CramFS
-cp /dav/dropbearmulti.lzma /home/dropbearmulti.lzma
-cd /home && lzma -df dropbearmulti.lzma && chmod +x /home/dropbearmulti
-
-# 2. Kill old dropbear by process name (no PID file exists)
-for pid in $(ps | grep '[d]ropbear' | awk '{print $1}'); do kill $pid 2>/dev/null; done
-sleep 1
-
-# 3. Replace binary (must rm first due to ETXTBSY)
-rm -f /sbin/dropbear
-cp /home/dropbearmulti /sbin/dropbear
-
-# 4. Set up keys and restart
-mkdir -p /root/.ssh
-cp /dav/authorized_keys /root/.ssh/authorized_keys
-chmod 600 /root/.ssh/authorized_keys
-/sbin/dropbear -r /devinfo/dropbear_ed25519_host_key -p 22 &
-```
-
-### Building dropbear for this platform
-
-The camera runs uClibc, not glibc. A static binary built with glibc will crash at runtime because glibc's NSS (Name Service Switch) tries to dynamically load `libnss_files.so` even in static builds (for `getpwnam()`, `getpwuid()` etc.). **You must use musl for static builds.**
-
-```sh
-# Download musl ARM cross-compiler
-wget https://musl.cc/arm-linux-musleabi-cross.tgz
-tar xzf arm-linux-musleabi-cross.tgz
-
-# Download dropbear
-wget https://matt.ucc.asn.au/dropbear/releases/dropbear-2025.89.tar.bz2
-tar xjf dropbear-2025.89.tar.bz2
-cd dropbear-2025.89
-
-# Configure for ed25519 only, no password auth
-cat > localoptions.h << 'EOF'
-#define DROPBEAR_SVR_PASSWORD_AUTH 0
-#define DROPBEAR_RSA 0
-#define DROPBEAR_DSS 0
-#define DROPBEAR_ECDSA 0
-#define DROPBEAR_ED25519 1
-EOF
-
-CC=/path/to/arm-linux-musleabi-cross/bin/arm-linux-musleabi-gcc
-./configure --host=arm-linux-musleabi \
-    --disable-zlib --disable-lastlog --disable-utmp \
-    --disable-utmpx --disable-wtmp --disable-wtmpx \
-    --disable-pututline --disable-pututxline \
-    --enable-static \
-    CC=$CC \
-    AR=${CC/gcc/ar} RANLIB=${CC/gcc/ranlib} STRIP=${CC/gcc/strip} \
-    CFLAGS="-Os -march=armv5te" LDFLAGS="-static"
-make PROGRAMS="dropbear dropbearkey" MULTI=1 STATIC=1 -j$(nproc)
-arm-linux-musleabi-strip dropbearmulti
-lzma -9 -k dropbearmulti
-# Result: ~147KB compressed, ~347KB stripped
-```
-
-### Building ssh_enable (SQLite firewall tool)
-
-```sh
-# Download SQLite amalgamation
-wget https://sqlite.org/2024/sqlite-amalgamation-3460100.zip
-unzip sqlite-amalgamation-3460100.zip
-```
-
-`ssh_enable.c`:
-```c
-#include "sqlite3.h"
-#include <stdio.h>
-int main(void) {
-    sqlite3 *db;
-    if (sqlite3_open("/devinfo/ipc_db", &db) != SQLITE_OK) {
-        puts("open failed");
-        return 1;
-    }
-    sqlite3_exec(db, "UPDATE security_config SET ssh_enable=1 WHERE idx=1", 0, 0, 0);
-    sqlite3_close(db);
-    puts("ssh_enable=1");
-    return 0;
-}
-```
-
-```sh
-arm-linux-musleabi-gcc -Os -march=armv5te -static \
-    -DSQLITE_OMIT_LOAD_EXTENSION -DSQLITE_THREADSAFE=0 \
-    -o ssh_enable ssh_enable.c sqlite-amalgamation-3460100/sqlite3.c \
-    -Isqlite-amalgamation-3460100 -lm -lpthread
-arm-linux-musleabi-strip ssh_enable
-lzma -9 -k ssh_enable
-# Result: ~296KB compressed, ~672KB stripped
-```
+**Warning:** The firmware update flashes both uImage (kernel) and app.img. A bad kernel bricks the camera and requires UART recovery. Only modify app.img (CramFS) unless you have UART access. A bad CramFS causes application failures but the kernel still boots, so you can reflash via the web interface.
 
 ## Firmware format
 
@@ -341,66 +182,15 @@ Offset     Size       Section
 0x3586CC   ~10.2 MB   app.img (CramFS application filesystem)
 ```
 
-### uImage structure
-
-The uImage is a standard u-boot image wrapping a Linux ARM zImage:
-
-```
-[64-byte u-boot header] [ARM zImage]
-```
-
-The zImage contains:
-- ARM decompression stub (first ~7KB)
-- LZMA-compressed kernel (offset 0x1C5B to end)
-
-The stub has two 32-bit LE words referencing the zImage end offset (at byte offsets 44 and 392). These must be updated if the compressed payload size changes.
-
-Inside the decompressed kernel (vmlinux), at offset 115148 (0x1C1CC):
-- gzip-compressed cpio archive (the initramfs)
-- Original size: 1,716,384 bytes compressed, 3,873,792 bytes decompressed
-
-## CramFS notes
-
-- Flat structure (all files in root, no subdirectories)
-- Rebuilt image must match original size exactly (10,747,904 bytes for this model). Pad with `truncate -s 10747904` if smaller. CramFS kernel driver reads size from superblock and ignores trailing zeros.
-- Use `mkfs.cramfs -n r2_app` to preserve the volume name
-- `initrun.sh` is the main init script that sets up the system at boot
-- `IEfile.tar.gz` contains the web UI. Despite the `.gz` extension, it is LZMA-compressed. Extracted by busybox `tar zxf ... --lzma`. When rebuilding: `tar cf - doc codebase dispatch.asp favicon.ico index.asp | lzma -9 > IEfile.tar.gz`. Do NOT use `tar cf - .` as the `./` prefix in paths breaks the web server.
-
-## Web UI notes
-
-- **SeaJS module system**: `common.js` detects page name from URL, loads page module via `require.async()`
-- **jQuery Layout plugin**: required by `common.js` (`require("layout")`). Preview page must include `.layout-center`, `.layout-center-inner`, `.layout-south-inner` divs or it throws "center-pane element does not exist"
-- **Authentication**: HTTP Basic auth. Credentials stored in `sessionStorage.userInfo` as `base64("user:password")`. Accessible via `common.m_szNamePwd`. Use `base64.decode()` + `utils.parseNamePwd()` to extract username/password.
-- **Snapshot endpoint**: `/ISAPI/Streaming/channels/101/picture` returns JPEG (1280x720). Requires HTTP Basic auth. Use XHR with `xhr.open("GET", url, true, username, password)` for browser-native auth.
-- **RTSP**: `rtsp://host:554/ISAPI/streaming/channels/101`
-- **Language packs**: 26 non-English translations in `doc/i18n/`. English comes from `IElang.tar` (40KB, in CramFS root, separate from IEfile). `Languages.json` controls the language dropdown.
-
-## WiFi notes
-
-- `net_process` is the core networking daemon with embedded wpa_supplicant v2.6
-- No application-level reconnection watchdog exists in the original firmware
-- RTL8188EU driver power save (IPS/LPS) is a known cause of WiFi drops. Disable with: `echo 0 > /proc/net/rtl8188eu/wlan0/ips_mode` and `echo 0 > /proc/net/rtl8188eu/wlan0/lps_mode`
-
 ## Recovery
 
-### UART serial console
+If the camera is bricked, recovery requires UART serial access (115200 baud, 8N1, 3.3V TTL). Connect a USB-to-TTL adapter to the UART pads on the PCB.
 
-If the camera is bricked (bad kernel flash, corrupted firmware), recovery requires UART access:
-
-- **Baud rate**: 115200, 8N1
-- **Voltage**: 3.3V TTL (do NOT use 5V)
-- Open camera case, find UART pads on PCB (usually a 4-pin header: VCC, TX, RX, GND)
-- Connect USB-to-TTL adapter: adapter TX to camera RX, adapter RX to camera TX, GND to GND
-
-At u-boot prompt (`hisilicon #`):
+At the u-boot prompt (`hisilicon #`):
 
 ```sh
-# Set network
 setenv ipaddr 192.168.1.10
 setenv serverip 192.168.1.1
-
-# Flash original kernel via TFTP
 mw.b 0x82000000 0xff 0x400000
 tftp 0x82000000 recovery_uImage
 sf probe 0
@@ -409,12 +199,11 @@ sf write 0x82000000 0x100000 ${filesize}
 reset
 ```
 
-### Important warnings
+The original firmware is at `firmware_extracted/digicap.dav`.
 
-- **The firmware update DOES flash the uImage (kernel)**. Modifying the kernel initramfs or zImage and flashing it WILL replace the kernel on the camera. If the modified kernel doesn't boot, the camera is bricked and requires UART recovery.
-- **Do NOT modify the uImage** unless you have UART access for recovery. CramFS (app.img) modifications are much safer. A bad CramFS will cause application failures but the kernel still boots, and you can reflash via the web interface.
-- Always keep the original `digicap.dav` for recovery.
-- The original firmware is at `firmware_extracted/digicap.dav`.
+## Platform reference
+
+See [INTERNALS.md](INTERNALS.md) for detailed notes on the camera hardware, boot sequence, initramfs contents, SSH/firewall architecture, cross-compilation, and web UI internals.
 
 ## License
 
