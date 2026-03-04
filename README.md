@@ -200,14 +200,15 @@ The address pair is hardcoded in u-boot and varies by model. Try both. If neithe
 The camera uses a proprietary handshake on UDP ports 9978/9979 before requesting `digicap.dav` via standard TFTP (port 69). The [hikvision-tftpd](https://github.com/scottlamb/hikvision-tftpd) tool handles both the handshake and TFTP serving.
 
 ```sh
-# Install
-pip install hikvision-tftpd
+# Clone the TFTP server
+git clone https://github.com/scottlamb/hikvision-tftpd.git
 
 # Add the expected server IP to your interface
 sudo ip addr add 192.0.0.128/24 dev eth0
 
 # Connect camera directly via ethernet, then:
-hikvision-tftpd --firmware firmware_extracted/digicap.dav
+cd hikvision-tftpd
+sudo ./hikvision_tftpd.py firmware_extracted/digicap.dav
 
 # Power on the camera and wait for it to pull the firmware
 ```
