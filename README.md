@@ -184,7 +184,7 @@ Offset     Size       Section
 
 ## Recovery
 
-The DS-2CD2420F-IW PCB has **no UART pin headers or exposed test pads**. However, the Hi3518E u-boot bootloader has built-in TFTP recovery that runs on every boot, before the kernel. This works even when the kernel or CramFS is corrupted.
+The DS-2CD2420F-IW PCB has **no UART pin headers or exposed test pads**. To open the case, note there is a hidden screw behind the Hikvision sticker on the back. However, the Hi3518E u-boot bootloader has built-in TFTP recovery that runs on every boot, before the kernel. This works even when the kernel or CramFS is corrupted.
 
 ### TFTP recovery
 
