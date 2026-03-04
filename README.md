@@ -203,11 +203,17 @@ The address pair is hardcoded in u-boot and varies by model. Try both. If neithe
 The camera uses a proprietary handshake on UDP ports 9978/9979 before requesting `digicap.dav` via standard TFTP (port 69). The included `hikvision_tftpd.py` script (based on [scottlamb/hikvision-tftpd](https://github.com/scottlamb/hikvision-tftpd)) handles both the handshake and TFTP serving.
 
 ```sh
+git clone https://github.com/renaudallard/hikvision_R2_firmware.git
+cd hikvision_R2_firmware
+
+# Download the recovery firmware from the GitHub release
+gh release download v5.4.800-recovery
+
 # Add the expected server IP to your interface
 sudo ip addr add 192.0.0.128/24 dev eth0
 
 # Connect camera directly via ethernet, then:
-sudo ./hikvision_tftpd.py firmware_extracted/digicap.dav
+sudo ./hikvision_tftpd.py digicap.dav
 
 # Hold reset button, power on the camera, keep holding 10+ seconds
 # Wait 3-5 minutes for the transfer and reflash to complete
