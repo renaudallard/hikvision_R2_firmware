@@ -209,8 +209,9 @@ cd hikvision_R2_firmware
 # Download the recovery firmware from the GitHub release
 gh release download v5.4.800-recovery
 
-# Add the expected server IP to your interface
+# Add both known recovery IPs to your interface
 sudo ip addr add 192.0.0.128/24 dev eth0
+sudo ip addr add 192.168.1.128/24 dev eth0
 
 # Connect camera directly via ethernet, then:
 sudo ./hikvision_tftpd.py digicap.dav
@@ -218,6 +219,8 @@ sudo ./hikvision_tftpd.py digicap.dav
 # Hold reset button, power on the camera, keep holding 10+ seconds
 # Wait 3-5 minutes for the transfer and reflash to complete
 ```
+
+The script listens on both 192.0.0.128 and 192.168.1.128 by default (skipping any that aren't configured). Use `--server-ip` to override.
 
 If the camera doesn't connect, use `tcpdump -i eth0 arp` to see what IP it's requesting and adjust accordingly.
 
