@@ -22,10 +22,13 @@ unpacked/ ───repack───> modified.dav   (auto-resigns _cfgUpgSecPls)
 
 Repacking automatically updates the `_cfgUpgSecPls` signature file with correct SHA-0 hashes, so the camera accepts the modified firmware.
 
-## Requirements
+## Install
 
-- Python 3.6+
-- `cryptography` library (`pip install cryptography`)
+```sh
+git clone https://github.com/renaudallard/hikvision_R2_firmware.git
+cd hikvision_R2_firmware
+pip install cryptography
+```
 
 ## Usage
 
