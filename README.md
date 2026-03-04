@@ -187,11 +187,11 @@ Offset     Size       Section
 
 ## Recovery
 
-The DS-2CD2420F-IW PCB has **no UART pin headers or exposed test pads**. To open the case, note there is a hidden screw behind the Hikvision sticker on the back. However, the Hi3518E u-boot bootloader has built-in TFTP recovery that runs on every boot, before the kernel. This works even when the kernel or CramFS is corrupted.
+The DS-2CD2420F-IW PCB has **no UART pin headers or exposed test pads**. To open the case, note there is a hidden screw behind the Hikvision sticker on the back. However, the Hi3518E u-boot bootloader has built-in TFTP recovery. This works even when the kernel or CramFS is corrupted.
 
 ### TFTP recovery
 
-On boot, u-boot briefly brings up ethernet and tries to fetch firmware from a TFTP server. No button press or serial access is needed.
+Hold the reset button while powering on the camera (keep holding for at least 10 seconds). This triggers u-boot to look for a TFTP server on the network and download `digicap.dav`.
 
 | Camera IP | TFTP server IP |
 |-----------|----------------|
@@ -209,7 +209,8 @@ sudo ip addr add 192.0.0.128/24 dev eth0
 # Connect camera directly via ethernet, then:
 sudo ./hikvision_tftpd.py firmware_extracted/digicap.dav
 
-# Power on the camera and wait for it to pull the firmware
+# Hold reset button, power on the camera, keep holding 10+ seconds
+# Wait 3-5 minutes for the transfer and reflash to complete
 ```
 
 If the camera doesn't connect, use `tcpdump -i eth0 arp` to see what IP it's requesting and adjust accordingly.
