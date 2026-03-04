@@ -117,7 +117,7 @@ curl -u 'admin:PASSWORD' -X PUT \
   -H "Content-Type: application/octet-stream"
 ```
 
-**Warning:** The firmware update flashes both uImage (kernel) and app.img. A bad kernel bricks the camera and requires UART recovery. Only modify app.img (CramFS) unless you have UART access. A bad CramFS causes application failures but the kernel still boots, so you can reflash via the web interface.
+**Warning:** The firmware update flashes both uImage (kernel) and app.img. A bad image in either section bricks the camera and requires UART recovery. The web server and SSH both depend on CramFS applications starting successfully, so a corrupted CramFS is just as unrecoverable as a bad kernel without UART access.
 
 ## Firmware format
 
