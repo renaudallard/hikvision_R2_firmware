@@ -184,22 +184,26 @@ Offset     Size       Section
 
 ## Recovery
 
-If the camera is bricked, recovery requires UART serial access (115200 baud, 8N1, 3.3V TTL). Connect a USB-to-TTL adapter to the UART pads on the PCB.
+The DS-2CD2420F-IW PCB has **no UART pin headers or exposed test pads**. If the camera is bricked, the only recovery option is reprogramming the SPI NOR flash chip directly.
 
-At the u-boot prompt (`hisilicon #`):
+### SPI flash programmer
+
+The Hi3518E uses a SOIC-8 SPI NOR flash chip (e.g. W25Q128, MX25L, GD25Q). You can read/write it in-circuit with a CH341A USB programmer and a SOIC-8 clip:
 
 ```sh
-setenv ipaddr 192.168.1.10
-setenv serverip 192.168.1.1
-mw.b 0x82000000 0xff 0x400000
-tftp 0x82000000 recovery_uImage
-sf probe 0
-sf erase 0x100000 0x400000
-sf write 0x82000000 0x100000 ${filesize}
-reset
+# Install flashrom
+sudo apt install flashrom
+
+# Read current (bricked) flash for backup
+flashrom -p ch341a_spi -r bricked_dump.bin
+
+# Write back a known-good full flash dump
+flashrom -p ch341a_spi -w good_dump.bin
 ```
 
-The original firmware is at `firmware_extracted/digicap.dav`.
+Note: this requires a full flash image (all partitions including u-boot), not just a `digicap.dav` firmware file. Always dump the flash before making any modifications so you have a complete backup to restore.
+
+The original firmware file is at `firmware_extracted/digicap.dav` but it only contains the kernel and app partitions, not u-boot or the full flash layout.
 
 ## Platform reference
 

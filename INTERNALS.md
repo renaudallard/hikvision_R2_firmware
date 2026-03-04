@@ -218,7 +218,7 @@ Inside the decompressed kernel (vmlinux), at offset 115148 (0x1C1CC):
 - gzip-compressed cpio archive (the initramfs)
 - Original size: 1,716,384 bytes compressed, 3,873,792 bytes decompressed
 
-**Warning:** Modifying the uImage and flashing it WILL replace the kernel on the camera. If the modified kernel doesn't boot, the camera is bricked and requires UART recovery.
+**Warning:** Modifying the uImage and flashing it WILL replace the kernel on the camera. If the modified kernel doesn't boot, the camera is bricked. The DS-2CD2420F-IW has no UART headers or test pads, so recovery requires a SPI flash programmer (see README.md).
 
 ## Web UI notes
 
