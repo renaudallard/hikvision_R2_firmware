@@ -190,10 +190,12 @@ The DS-2CD2420F-IW PCB has **no UART pin headers or exposed test pads**. To open
 
 On boot, u-boot briefly brings up ethernet and tries to fetch firmware from a TFTP server. No button press or serial access is needed.
 
-| Firmware version | Camera IP | TFTP server IP |
-|------------------|-----------|----------------|
-| Pre-5.0.0 (this model) | 192.0.0.64 | 192.0.0.128 |
-| 5.0.0+ | 192.168.1.64 | 192.168.1.128 |
+| Camera IP | TFTP server IP |
+|-----------|----------------|
+| 192.0.0.64 | 192.0.0.128 |
+| 192.168.1.64 | 192.168.1.128 |
+
+The address pair is hardcoded in u-boot and varies by model. Try both. If neither works, use `tcpdump -i eth0 arp` to see which IP the camera requests.
 
 The camera uses a proprietary handshake on UDP ports 9978/9979 before requesting `digicap.dav` via standard TFTP (port 69). The [hikvision-tftpd](https://github.com/scottlamb/hikvision-tftpd) tool handles both the handshake and TFTP serving.
 
