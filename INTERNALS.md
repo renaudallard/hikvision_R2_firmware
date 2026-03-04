@@ -14,7 +14,7 @@ Research notes on the DS-2CD2420F-IW (V5.4.800) internals. Useful when making Cr
 | WiFi chipset | Realtek RTL8188EU (USB) |
 | WiFi driver | 8188eu.ko |
 | Root shell | `/bin/psh` (custom shell, not standard sh) |
-| Root password hash | `ToCOv8qxP13qs` (DES crypt in `/etc/passwd`) |
+| Root password | `hiklinux` (DES crypt hash `ToCOv8qxP13qs` in `/etc/passwd`) |
 
 ## Boot sequence
 
