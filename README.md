@@ -184,26 +184,47 @@ Offset     Size       Section
 
 ## Recovery
 
-The DS-2CD2420F-IW PCB has **no UART pin headers or exposed test pads**. If the camera is bricked, the only recovery option is reprogramming the SPI NOR flash chip directly.
+The DS-2CD2420F-IW PCB has **no UART pin headers or exposed test pads**. However, the Hi3518E u-boot bootloader has built-in TFTP recovery that runs on every boot, before the kernel. This works even when the kernel or CramFS is corrupted.
 
-### SPI flash programmer
+### TFTP recovery
 
-The Hi3518E uses a SOIC-8 SPI NOR flash chip (e.g. W25Q128, MX25L, GD25Q). You can read/write it in-circuit with a CH341A USB programmer and a SOIC-8 clip:
+On boot, u-boot briefly brings up ethernet and tries to fetch firmware from a TFTP server. No button press or serial access is needed.
+
+| Firmware version | Camera IP | TFTP server IP |
+|------------------|-----------|----------------|
+| Pre-5.0.0 (this model) | 192.0.0.64 | 192.0.0.128 |
+| 5.0.0+ | 192.168.1.64 | 192.168.1.128 |
+
+The camera uses a proprietary handshake on UDP ports 9978/9979 before requesting `digicap.dav` via standard TFTP (port 69). The [hikvision-tftpd](https://github.com/scottlamb/hikvision-tftpd) tool handles both the handshake and TFTP serving.
 
 ```sh
-# Install flashrom
-sudo apt install flashrom
+# Install
+pip install hikvision-tftpd
 
-# Read current (bricked) flash for backup
-flashrom -p ch341a_spi -r bricked_dump.bin
+# Add the expected server IP to your interface
+sudo ip addr add 192.0.0.128/24 dev eth0
 
-# Write back a known-good full flash dump
-flashrom -p ch341a_spi -w good_dump.bin
+# Connect camera directly via ethernet, then:
+hikvision-tftpd --firmware firmware_extracted/digicap.dav
+
+# Power on the camera and wait for it to pull the firmware
 ```
 
-Note: this requires a full flash image (all partitions including u-boot), not just a `digicap.dav` firmware file. Always dump the flash before making any modifications so you have a complete backup to restore.
+If the camera doesn't connect, use `tcpdump -i eth0 arp` to see what IP it's requesting and adjust accordingly.
 
-The original firmware file is at `firmware_extracted/digicap.dav` but it only contains the kernel and app partitions, not u-boot or the full flash layout.
+### SPI flash programmer (last resort)
+
+If TFTP recovery fails, the SPI NOR flash chip (SOIC-8, e.g. W25Q128) can be reprogrammed directly with a CH341A USB programmer and a SOIC-8 clip:
+
+```sh
+sudo apt install flashrom
+flashrom -p ch341a_spi -r bricked_dump.bin    # backup first
+flashrom -p ch341a_spi -w good_dump.bin       # restore
+```
+
+This requires a full flash image (all partitions including u-boot), not just a `digicap.dav`. Always dump the flash before making modifications.
+
+The original firmware is at `firmware_extracted/digicap.dav` (kernel + app only, no u-boot).
 
 ## Platform reference
 
