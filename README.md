@@ -1,40 +1,55 @@
 # hikfw
 
-Unpack, modify, resign, and repack Hikvision IPC R2 series firmware.
+Modern web UI and firmware tools for Hikvision IPC R2 cameras.
 
-Tested on **DS-2CD2420F-IW** (V5.4.800 build 210813). Should work on other IPC R2 models using the SWKH firmware format.
+Replaces the original Internet Explorer-only ActiveX interface with a clean, modern web UI that works on any browser. Pre-built firmware ready to flash on stock cameras.
+
+Tested on **DS-2CD2420F-IW** (V5.4.800). Should work on other IPC R2 models using the SWKH firmware format.
 
 ---
 
-## Modified firmware
+## New Web UI
 
-Pre-built firmware ready to flash is on the [Releases](https://github.com/renaudallard/hikvision_R2_firmware/releases) page. Works on stock cameras.
+| | |
+|---|---|
+| **Live View** | Real-time JPEG snapshot stream, main/sub stream selector, screenshot capture, fullscreen |
+| **Network** | IP address, DHCP/static, subnet, gateway, DNS |
+| **WiFi** | Scan available networks with signal strength, connect with password |
+| **Ports** | HTTP, HTTPS, RTSP, SDK port configuration |
+| **Video** | 3 streams (main/sub/third), codec, bitrate, frame rate, H.264 profile, quality type |
+| **Image** | Brightness, contrast, saturation, sharpness sliders, WDR mode and level, IR cut filter (auto/day/night), ISP day/night mode, mirror/flip |
+| **OSD** | Date/time overlay, date format, display week, channel name overlay |
+| **Audio** | Enable/disable audio channel |
+| **Motion Detection** | Enable/disable, sensitivity slider |
+| **PIR** | PIR sensor status and notification methods |
+| **Email** | SMTP server, SSL/TLS, authentication, sender, 3 receivers, snapshot attachment |
+| **FTP** | FTP upload server, port, credentials, anonymous mode |
+| **DDNS** | Dynamic DNS provider, server, domain, credentials |
+| **Time** | NTP or manual, NTP server address, sync interval |
+| **Users** | Change admin password |
+| **Device Name** | Rename camera (updates channel name and device info) |
+| **System** | Device info, firmware upgrade with progress bar, config backup/restore, reboot, storage status |
 
-### What's included
+**Dark theme, 3 files, 37KB total** (replaces the original 600+ file / 1.2MB AngularJS application).
 
-**Modern web UI** replacing the original IE-only ActiveX interface
+Works on **Firefox, Chrome, Safari, Edge**. No plugins required.
 
-| Feature | Details |
-|---------|---------|
-| Live view | JPEG snapshot polling, main/sub stream, capture, fullscreen |
-| Configuration | Network, WiFi, ports, video (3 streams), image, OSD, audio, motion detection, PIR, email, FTP, DDNS, time, users, device name |
-| System | Device info, firmware upgrade, config backup/restore, reboot |
-| Compatibility | Firefox, Chrome, Safari, Edge |
-| Size | 3 files / 37KB (replaces 600+ files / 1.2MB) |
+---
 
-**WiFi watchdog** pings gateway every 30s, restarts networking after 3 failures, disables RTL8188EU power saving (IPS/LPS)
+## How to flash
 
-**Smaller firmware** by removing unused language packs and ActiveX installers
+Download `digicap.dav` from the [Releases](https://github.com/renaudallard/hikvision_R2_firmware/releases) page.
 
-### Compatibility
+### From the stock Hikvision web UI (Internet Explorer)
 
-RTSP, ONVIF, and ISAPI are untouched. The camera works normally with Synology Surveillance Station, Blue Iris, and any other NVR/VMS software.
+Go to **Configuration > System > Maintenance > Upgrade**, select `digicap.dav`, click Upgrade. After the camera reboots, you will have the new web UI accessible from any browser.
 
-### Flash
+### From the new web UI
 
-From the web UI: **System > Firmware Upgrade**, select `digicap.dav`, upload.
+Go to **System > Firmware Upgrade**, select `digicap.dav`, click Upload and Upgrade.
 
-From the command line:
+### From the command line
+
 ```sh
 curl -u 'admin:PASSWORD' -X PUT \
   "http://CAMERA_IP/ISAPI/System/updateFirmware" \
@@ -43,6 +58,18 @@ curl -u 'admin:PASSWORD' -X PUT \
 ```
 
 > **Warning:** A bad firmware bricks the camera and requires TFTP recovery. See [Recovery](#recovery).
+
+---
+
+## Other firmware modifications
+
+**WiFi watchdog** pings gateway every 30s, restarts networking after 3 failures, disables RTL8188EU power saving (IPS/LPS)
+
+**Smaller firmware** by removing unused language packs and ActiveX installers
+
+### NVR compatibility
+
+RTSP, ONVIF, and ISAPI are untouched. The camera works normally with Synology Surveillance Station, Blue Iris, and any other NVR/VMS software.
 
 ---
 
