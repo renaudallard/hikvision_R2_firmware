@@ -367,6 +367,24 @@ def repack(input_dir, output_path):
             current_offset += len(content)
         total_size = current_offset
 
+        # Re-resign with corrected offsets (secpls size change shifts all files)
+        signed_files = []
+        for entry in file_entries:
+            if entry['name'] != '_cfgUpgSecPls':
+                idx = file_names.index(entry['name'])
+                signed_files.append((
+                    entry['name'],
+                    file_contents[idx],
+                    entry['offset'],
+                    entry['size'],
+                ))
+        new_secpls = resign_secpls(file_contents[secpls_idx], signed_files)
+        if len(new_secpls) != len(file_contents[secpls_idx]):
+            print("Error: secpls size changed during re-resign (should be stable)")
+            sys.exit(1)
+        file_contents[secpls_idx] = new_secpls
+        file_entries[secpls_idx]['checksum'] = byte_checksum(new_secpls)
+
     # Build decrypted header
     hdr_buf = bytearray(header_len)
 

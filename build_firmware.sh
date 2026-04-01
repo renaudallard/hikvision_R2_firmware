@@ -22,18 +22,26 @@ mkdir -p "$WORK/unpacked" "$WORK/iefiles"
 # Unpack base firmware
 python3 "$SCRIPT_DIR/hikfw.py" unpack "$BASE_FW" -o "$WORK/unpacked"
 
-# Extract CramFS
-/usr/sbin/fsck.cramfs --extract="$WORK/cramfs" "$WORK/unpacked/app.img"
-
 # Build IEfile.tar.gz from webui/ source
 cp "$WEBUI_DIR/index.asp" "$WEBUI_DIR/style.css" "$WEBUI_DIR/app.js" "$WORK/iefiles/"
 [ -f "$WEBUI_DIR/favicon.ico" ] && cp "$WEBUI_DIR/favicon.ico" "$WORK/iefiles/"
 cd "$WORK/iefiles"
-tar cf - $(ls) | xz --format=lzma --lzma1=dict=8MiB,lc=3,lp=0,pb=2 > "$WORK/cramfs/IEfile.tar.gz"
+tar cf - $(ls) | xz --format=lzma --lzma1=dict=8MiB,lc=3,lp=0,pb=2 > "$WORK/ie_new.tar.gz"
 cd "$SCRIPT_DIR"
 
-# Rebuild CramFS
-/usr/sbin/mkfs.cramfs -n r2_app "$WORK/cramfs" "$WORK/unpacked/app.img"
+# Detect firmware type: CramFS (R2) or flat files (R0)
+if [ -f "$WORK/unpacked/app.img" ]; then
+    echo "Detected CramFS firmware (IPC R2)"
+    /usr/sbin/fsck.cramfs --extract="$WORK/cramfs" "$WORK/unpacked/app.img"
+    cp "$WORK/ie_new.tar.gz" "$WORK/cramfs/IEfile.tar.gz"
+    /usr/sbin/mkfs.cramfs -n r2_app "$WORK/cramfs" "$WORK/unpacked/app.img"
+elif [ -f "$WORK/unpacked/IEfile.tar.gz" ]; then
+    echo "Detected flat firmware (IPC R0/R6)"
+    cp "$WORK/ie_new.tar.gz" "$WORK/unpacked/IEfile.tar.gz"
+else
+    echo "Error: no app.img or IEfile.tar.gz found in unpacked firmware"
+    exit 1
+fi
 
 # Repack firmware
 python3 "$SCRIPT_DIR/hikfw.py" repack "$WORK/unpacked" -o "$OUTPUT"

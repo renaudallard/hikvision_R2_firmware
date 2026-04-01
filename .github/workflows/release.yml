@@ -45,15 +45,19 @@ jobs:
           sudo apt-get install -y util-linux-extra xz-utils
           pip install cryptography
 
-      - name: Download base firmware
+      - name: Download base firmwares
         if: steps.check.outputs.exists == 'false'
-        run: gh release download v0.0.0-base -p 'firmware_base.dav' -D .
+        run: gh release download v0.0.0-base -D .
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build firmware
+      - name: Build R2 firmware
         if: steps.check.outputs.exists == 'false'
-        run: ./build_firmware.sh firmware_base.dav digicap.dav
+        run: ./build_firmware.sh firmware_base.dav digicap_r2.dav
+
+      - name: Build R0 firmware
+        if: steps.check.outputs.exists == 'false'
+        run: ./build_firmware.sh firmware_base_r0.dav digicap_r0.dav
 
       - name: Create release
         if: steps.check.outputs.exists == 'false'
@@ -62,10 +66,14 @@ jobs:
             --title "v${{ steps.version.outputs.version }}" \
             --notes "Firmware v${{ steps.version.outputs.version }}
 
+          Two firmware files for different camera platforms:
+          - **digicap_r2.dav** - IPC R2 (Hi3518E): DS-2CD2020F, DS-2CD2120F, DS-2CD2420F-IW, DS-2CD2x42, etc.
+          - **digicap_r0.dav** - IPC R0 (Hi3516C): DS-2CD2032-I, DS-2CD2132-I, DS-2CD2332-I, DS-2CD2x32, etc.
+
           Flash via web UI (System > Firmware Upgrade) or curl:
           \`\`\`
-          curl -u 'admin:PASSWORD' -X PUT http://CAMERA_IP/ISAPI/System/updateFirmware --data-binary @digicap.dav
+          curl -u 'admin:PASSWORD' -X PUT http://CAMERA_IP/ISAPI/System/updateFirmware --data-binary @digicap_r2.dav
           \`\`\`" \
-            digicap.dav
+            digicap_r2.dav digicap_r0.dav
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

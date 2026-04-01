@@ -15,13 +15,20 @@ Tested on **DS-2CD2420F-IW** (V5.4.800). The firmware is compatible with **all 1
 
 ## Download and Flash
 
-Download `digicap.dav` from the **[Releases](https://github.com/renaudallard/hikvision_R2_firmware/releases/latest)** page, then flash using one of:
+Download the right firmware from the **[Releases](https://github.com/renaudallard/hikvision_R2_firmware/releases/latest)** page:
+
+| Firmware | Platform | Camera models |
+|----------|----------|---------------|
+| `digicap_r2.dav` | IPC R2 (Hi3518E) | DS-2CD2020F, DS-2CD2120F, DS-2CD2420F-IW, DS-2CD2x42, and 145 more |
+| `digicap_r0.dav` | IPC R0 (Hi3516C) | DS-2CD2032-I, DS-2CD2132-I, DS-2CD2332-I, DS-2CD2x32, and more |
+
+Then flash:
 
 | Method | Steps |
 |--------|-------|
 | **Stock Hikvision UI** (IE) | Configuration > System > Maintenance > Upgrade, select file, click Upgrade |
 | **New web UI** (any browser) | System > Firmware Upgrade, select file, click Upload and Upgrade |
-| **Command line** | `curl -u 'admin:PASSWORD' -X PUT "http://CAMERA_IP/ISAPI/System/updateFirmware" --data-binary @digicap.dav` |
+| **Command line** | `curl -u 'admin:PASSWORD' -X PUT "http://CAMERA_IP/ISAPI/System/updateFirmware" --data-binary @digicap_r2.dav` |
 
 After reboot, the new web UI is accessible from any browser at `http://CAMERA_IP/`.
 
@@ -56,7 +63,9 @@ After reboot, the new web UI is accessible from any browser at `http://CAMERA_IP
 
 ## Compatibility
 
-**145 camera models** - Hikvision ships one firmware for the entire IPC R2 platform. The `_cfgUpgClass` compatibility table in this firmware covers 145 device IDs across all R2 series (DS-2CD20xx, DS-2CD21xx, DS-2CD24xx, DS-2CD26xx, DS-2CDxx32, DS-2CDxx42, etc.).
+**Two platforms supported:**
+- **IPC R2** (Hi3518E, 2MP) - 145 device IDs: DS-2CD20xx, DS-2CD21xx, DS-2CD24xx, DS-2CD26xx, DS-2CDxx42, etc.
+- **IPC R0** (Hi3516C, 3MP+) - DS-2CD2x32 series, DS-2CD2332-I, DS-2CD2132-I, etc.
 
 **NVR/VMS** - RTSP, ONVIF, and ISAPI are untouched. Works normally with **Synology Surveillance Station**, **Blue Iris**, and any other NVR/VMS.
 
