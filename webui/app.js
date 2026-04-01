@@ -1,5 +1,5 @@
 var App = {
-  VERSION: '1.0.0',
+  VERSION: '1.0.1',
   user: null,
   pass: null,
   streaming: false,
@@ -226,7 +226,12 @@ var App = {
     clearTimeout(this.streamTimer);
     clearInterval(this.fpsTimer);
     this.streamTimer = null;
+    // Revoke blob and hide image so no broken image shows
+    var img = document.getElementById('live-img');
+    if (img) { img.style.display = 'none'; img.src = ''; }
     if (this._prevBlob) { URL.revokeObjectURL(this._prevBlob); this._prevBlob = null; }
+    var msg = document.getElementById('live-msg');
+    if (msg) { msg.style.display = ''; msg.textContent = 'Click Start to begin live view'; }
     var btn = document.getElementById('btn-stream-toggle');
     if (btn) btn.textContent = 'Start';
     var fps = document.getElementById('live-fps');
@@ -357,13 +362,19 @@ var App = {
         rows += '<td><span class="signal-bar"><span class="signal-fill" style="width:' + pct + '%;background:' + barColor + '"></span></span>' + signal + '%</td>';
         rows += '<td>' + self.esc(sec) + '</td>';
         rows += '<td>' + (isConn ? '<span class="connected">Connected</span>' : '') + '</td>';
-        rows += '<td>' + (isConn ? '' : '<button class="btn btn-sm" onclick="App.wifiPromptConnect(\'' + self.esc(ssid).replace(/'/g, "\\'") + '\',\'' + self.esc(sec).replace(/'/g, "\\'") + '\')">Connect</button>') + '</td>';
+        rows += '<td>' + (isConn ? '' : '<button class="btn btn-sm wifi-connect-btn" data-ssid="' + self.esc(ssid).replace(/"/g, '&quot;') + '" data-sec="' + self.esc(sec).replace(/"/g, '&quot;') + '">Connect</button>') + '</td>';
         rows += '</tr>';
       }
       if (aps.length === 0) {
         rows = '<tr><td colspan="5" style="color:var(--fg3)">No networks found</td></tr>';
       }
       document.getElementById('wifi-list').innerHTML = rows;
+      var btns = document.querySelectorAll('.wifi-connect-btn');
+      for (var j = 0; j < btns.length; j++) {
+        btns[j].onclick = function() {
+          self.wifiPromptConnect(this.getAttribute('data-ssid'), this.getAttribute('data-sec'));
+        };
+      }
     });
   },
 
@@ -438,7 +449,7 @@ var App = {
     };
     for (var proto in map) {
       if (map.hasOwnProperty(proto)) {
-        var re = new RegExp('(<AdminAccessProtocol>[\\s\\S]*?<protocol>' + proto + '</protocol>[\\s\\S]*?<portNo>)[^<]*(</portNo>)');
+        var re = new RegExp('(<AdminAccessProtocol[^>]*>[\\s\\S]*?<protocol>' + proto + '</protocol>[\\s\\S]*?<portNo>)[^<]*(</portNo>)');
         xml = xml.replace(re, '$1' + map[proto] + '$2');
       }
     }
