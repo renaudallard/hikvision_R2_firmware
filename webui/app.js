@@ -140,23 +140,34 @@ var App = {
     self.streaming = true;
     self.frameCount = 0;
     self.lastFpsTime = Date.now();
+    self._prevBlob = null;
     document.getElementById('btn-stream-toggle').textContent = 'Stop';
     msg.textContent = 'Connecting...';
 
     var fetchFrame = function() {
       if (!self.streaming) return;
-      var next = new Image();
-      next.onload = function() {
-        img.src = next.src;
-        img.style.display = 'block';
-        msg.style.display = 'none';
-        self.frameCount++;
-        self.streamTimer = setTimeout(fetchFrame, 100);
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', self.apiUrl('/ISAPI/Streaming/channels/' + ch + '/picture?_=' + Date.now()), true);
+      xhr.responseType = 'blob';
+      xhr.onload = function() {
+        if (!self.streaming) return;
+        if (xhr.status >= 200 && xhr.status < 300) {
+          if (self._prevBlob) URL.revokeObjectURL(self._prevBlob);
+          var url = URL.createObjectURL(xhr.response);
+          self._prevBlob = url;
+          img.src = url;
+          img.style.display = 'block';
+          msg.style.display = 'none';
+          self.frameCount++;
+          self.streamTimer = setTimeout(fetchFrame, 100);
+        } else {
+          self.streamTimer = setTimeout(fetchFrame, 1000);
+        }
       };
-      next.onerror = function() {
-        self.streamTimer = setTimeout(fetchFrame, 1000);
+      xhr.onerror = function() {
+        if (self.streaming) self.streamTimer = setTimeout(fetchFrame, 1000);
       };
-      next.src = self.apiUrl('/ISAPI/Streaming/channels/' + ch + '/picture') + '&_=' + Date.now();
+      xhr.send();
     };
 
     self.fpsTimer = setInterval(function() {
@@ -176,6 +187,7 @@ var App = {
     clearTimeout(this.streamTimer);
     clearInterval(this.fpsTimer);
     this.streamTimer = null;
+    if (this._prevBlob) { URL.revokeObjectURL(this._prevBlob); this._prevBlob = null; }
     var btn = document.getElementById('btn-stream-toggle');
     if (btn) btn.textContent = 'Start';
     var fps = document.getElementById('live-fps');
