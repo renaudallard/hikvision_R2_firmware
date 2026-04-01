@@ -6,6 +6,29 @@ var App = {
   frameCount: 0,
   fpsTimer: null,
   lastFpsTime: 0,
+  _prevBlob: null,
+  _currentCh: 101,
+
+  // stored XML for each config section
+  _netXml: null,
+  _portsXml: null,
+  _vidXml: {},
+  _imgColorXml: null,
+  _imgSharpXml: null,
+  _imgWdrXml: null,
+  _imgIRXml: null,
+  _imgISPXml: null,
+  _imgFlipXml: null,
+  _osdXml: null,
+  _audioXml: null,
+  _motionXml: null,
+  _emailXml: null,
+  _ftpXml: null,
+  _ddnsXml: null,
+  _timeXml: null,
+  _ntpXml: null,
+  _devChXml: null,
+  _devInfoXml: null,
 
   // --- API ---
   apiUrl: function(path) {
@@ -49,7 +72,7 @@ var App = {
   },
 
   xmlSet: function(xml, tag, val) {
-    return xml.replace(new RegExp('(<' + tag + '[^>]*>)[^<]*(</'+tag+'>)'), '$1' + val + '$2');
+    return xml.replace(new RegExp('(<' + tag + '[^>]*>)[^<]*(</' + tag + '>)'), '$1' + val + '$2');
   },
 
   // --- Toast ---
@@ -60,6 +83,21 @@ var App = {
     el.classList.remove('hidden');
     clearTimeout(el._t);
     el._t = setTimeout(function() { el.classList.add('hidden'); }, 3000);
+  },
+
+  // --- Slider display helper ---
+  updateSlider: function(id) {
+    var el = document.getElementById(id);
+    var valEl = document.getElementById(id + '-val');
+    if (el && valEl) valEl.textContent = el.value;
+  },
+
+  bindSlider: function(id) {
+    var self = this;
+    var el = document.getElementById(id);
+    if (el) {
+      el.oninput = function() { self.updateSlider(id); };
+    }
   },
 
   // --- Auth ---
@@ -140,7 +178,6 @@ var App = {
     self.streaming = true;
     self.frameCount = 0;
     self.lastFpsTime = Date.now();
-    self._prevBlob = null;
     document.getElementById('btn-stream-toggle').textContent = 'Stop';
     msg.textContent = 'Connecting...';
 
@@ -225,10 +262,20 @@ var App = {
     document.getElementById('cfg-loading').classList.remove('hidden');
 
     if (section === 'network') this.loadNetwork();
-    else if (section === 'video') this.loadVideo();
+    else if (section === 'wifi') this.loadWifi();
+    else if (section === 'ports') this.loadPorts();
+    else if (section === 'video') this.loadVideoStream(101);
     else if (section === 'image') this.loadImage();
+    else if (section === 'osd') this.loadOsd();
+    else if (section === 'audio') this.loadAudio();
+    else if (section === 'motion') this.loadMotion();
+    else if (section === 'pir') this.loadPir();
+    else if (section === 'email') this.loadEmail();
+    else if (section === 'ftp') this.loadFtp();
+    else if (section === 'ddns') this.loadDdns();
     else if (section === 'time') this.loadTime();
     else if (section === 'users') this.loadUsers();
+    else if (section === 'devname') this.loadDevName();
   },
 
   showCfg: function(id) {
@@ -236,7 +283,7 @@ var App = {
     document.getElementById(id).classList.remove('hidden');
   },
 
-  // Network
+  // --- Network ---
   loadNetwork: function() {
     var self = this;
     self.apiGet('/ISAPI/System/Network/interfaces/1', function(err, xml) {
@@ -274,104 +321,301 @@ var App = {
     });
   },
 
-  // Video
-  loadVideo: function() {
+  // --- WiFi ---
+  loadWifi: function() {
+    document.getElementById('wifi-list').innerHTML = '';
+    document.getElementById('wifi-status').textContent = '';
+    document.getElementById('wifi-connect-box').classList.add('hidden');
+    this.showCfg('cfg-wifi');
+  },
+
+  wifiScan: function() {
     var self = this;
-    var loaded = 0;
-    var done = function() { if (++loaded >= 2) self.showCfg('cfg-video'); };
-
-    self.apiGet('/ISAPI/Streaming/channels/101', function(err, xml) {
-      if (!err) {
-        self._vidMain = xml;
-        document.getElementById('vid-main-res').textContent = self.xmlVal(xml, 'videoResolutionWidth') + 'x' + self.xmlVal(xml, 'videoResolutionHeight');
-        document.getElementById('vid-main-codec').textContent = self.xmlVal(xml, 'videoCodecType');
-        document.getElementById('vid-main-bitrate').value = self.xmlVal(xml, 'vbrUpperCap') || self.xmlVal(xml, 'constantBitRate');
-        var fps = parseInt(self.xmlVal(xml, 'maxFrameRate')) || 2500;
-        document.getElementById('vid-main-fps').value = Math.round(fps / 100);
-        document.getElementById('vid-main-qtype').value = self.xmlVal(xml, 'videoQualityControlType');
-        document.getElementById('vid-main-profile').value = self.xmlVal(xml, 'H264Profile');
+    document.getElementById('wifi-status').textContent = 'Scanning...';
+    document.getElementById('wifi-list').innerHTML = '';
+    self.apiGet('/ISAPI/System/Network/interfaces/1/wireless/accessPointList', function(err, xml) {
+      if (err) {
+        document.getElementById('wifi-status').textContent = 'Scan failed';
+        return self.toast('WiFi scan failed', 'err');
       }
-      done();
-    });
-
-    self.apiGet('/ISAPI/Streaming/channels/102', function(err, xml) {
-      if (!err) {
-        self._vidSub = xml;
-        document.getElementById('vid-sub-res').textContent = self.xmlVal(xml, 'videoResolutionWidth') + 'x' + self.xmlVal(xml, 'videoResolutionHeight');
-        document.getElementById('vid-sub-codec').textContent = self.xmlVal(xml, 'videoCodecType');
-        document.getElementById('vid-sub-bitrate').value = self.xmlVal(xml, 'vbrUpperCap') || self.xmlVal(xml, 'constantBitRate');
-        var fps = parseInt(self.xmlVal(xml, 'maxFrameRate')) || 2500;
-        document.getElementById('vid-sub-fps').value = Math.round(fps / 100);
+      document.getElementById('wifi-status').textContent = '';
+      var rows = '';
+      var aps = xml.match(/<accessPoint>[\s\S]*?<\/accessPoint>/g) || [];
+      for (var i = 0; i < aps.length; i++) {
+        var ap = aps[i];
+        var ssid = self.xmlVal(ap, 'ssid');
+        var signal = parseInt(self.xmlVal(ap, 'signalStrength')) || 0;
+        var sec = self.xmlVal(ap, 'securityMode') || 'open';
+        var conn = self.xmlVal(ap, 'connected');
+        var isConn = conn === 'true';
+        var pct = Math.min(signal, 100);
+        var barColor = pct > 60 ? 'var(--success)' : pct > 30 ? '#eab308' : 'var(--warn)';
+        rows += '<tr>';
+        rows += '<td>' + self.esc(ssid) + '</td>';
+        rows += '<td><span class="signal-bar"><span class="signal-fill" style="width:' + pct + '%;background:' + barColor + '"></span></span>' + signal + '%</td>';
+        rows += '<td>' + self.esc(sec) + '</td>';
+        rows += '<td>' + (isConn ? '<span class="connected">Connected</span>' : '') + '</td>';
+        rows += '<td>' + (isConn ? '' : '<button class="btn btn-sm" onclick="App.wifiPromptConnect(\'' + self.esc(ssid).replace(/'/g, "\\'") + '\',\'' + self.esc(sec).replace(/'/g, "\\'") + '\')">Connect</button>') + '</td>';
+        rows += '</tr>';
       }
-      done();
+      if (aps.length === 0) {
+        rows = '<tr><td colspan="5" style="color:var(--fg3)">No networks found</td></tr>';
+      }
+      document.getElementById('wifi-list').innerHTML = rows;
     });
   },
 
-  saveVideo: function(ch) {
+  esc: function(s) {
+    var d = document.createElement('div');
+    d.appendChild(document.createTextNode(s));
+    return d.innerHTML;
+  },
+
+  wifiPromptConnect: function(ssid, sec) {
+    document.getElementById('wifi-connect-ssid').textContent = ssid;
+    document.getElementById('wifi-connect-ssid-val').value = ssid;
+    document.getElementById('wifi-connect-sec-val').value = sec;
+    document.getElementById('wifi-connect-key').value = '';
+    document.getElementById('wifi-connect-box').classList.remove('hidden');
+  },
+
+  wifiCancelConnect: function() {
+    document.getElementById('wifi-connect-box').classList.add('hidden');
+  },
+
+  wifiDoConnect: function() {
     var self = this;
-    var xml = ch === 101 ? self._vidMain : self._vidSub;
+    var ssid = document.getElementById('wifi-connect-ssid-val').value;
+    var sec = document.getElementById('wifi-connect-sec-val').value;
+    var key = document.getElementById('wifi-connect-key').value;
+    if (!key) return self.toast('Enter a password', 'err');
+
+    var xml = '<?xml version="1.0" encoding="UTF-8"?>';
+    xml += '<WirelessNetworkSetting xmlns="http://www.hikvision.com/ver20/XMLSchema">';
+    xml += '<wirelessNetworkMode>infrastructure</wirelessNetworkMode>';
+    xml += '<ssid>' + ssid + '</ssid>';
+    xml += '<securityMode>' + sec + '</securityMode>';
+    xml += '<WPA><algorithmType>TKIP/AES</algorithmType><sharedKey>' + key + '</sharedKey></WPA>';
+    xml += '</WirelessNetworkSetting>';
+
+    self.apiPut('/ISAPI/System/Network/interfaces/1/wireless', xml, function(err) {
+      if (err) return self.toast('Failed to connect to ' + ssid, 'err');
+      self.toast('Connecting to ' + ssid + '...', 'ok');
+      document.getElementById('wifi-connect-box').classList.add('hidden');
+    });
+  },
+
+  // --- Ports ---
+  loadPorts: function() {
+    var self = this;
+    self.apiGet('/ISAPI/Security/adminAccesses', function(err, xml) {
+      if (err) return self.toast('Failed to load ports', 'err');
+      self._portsXml = xml;
+      var protos = xml.match(/<AdminAccessProtocol>[\s\S]*?<\/AdminAccessProtocol>/g) || [];
+      for (var i = 0; i < protos.length; i++) {
+        var proto = self.xmlVal(protos[i], 'protocol');
+        var port = self.xmlVal(protos[i], 'portNo');
+        if (proto === 'HTTP') document.getElementById('port-http').value = port;
+        else if (proto === 'HTTPS') document.getElementById('port-https').value = port;
+        else if (proto === 'RTSP') document.getElementById('port-rtsp').value = port;
+        else if (proto === 'DEV_MANAGE') document.getElementById('port-sdk').value = port;
+      }
+      self.showCfg('cfg-ports');
+    });
+  },
+
+  savePorts: function() {
+    var self = this;
+    var xml = self._portsXml;
     if (!xml) return;
-    var prefix = ch === 101 ? 'vid-main' : 'vid-sub';
-    var bitrate = document.getElementById(prefix + '-bitrate').value;
-    var fps = document.getElementById(prefix + '-fps').value;
+    var map = {
+      'HTTP': document.getElementById('port-http').value,
+      'HTTPS': document.getElementById('port-https').value,
+      'RTSP': document.getElementById('port-rtsp').value,
+      'DEV_MANAGE': document.getElementById('port-sdk').value
+    };
+    for (var proto in map) {
+      if (map.hasOwnProperty(proto)) {
+        var re = new RegExp('(<AdminAccessProtocol>[\\s\\S]*?<protocol>' + proto + '</protocol>[\\s\\S]*?<portNo>)[^<]*(</portNo>)');
+        xml = xml.replace(re, '$1' + map[proto] + '$2');
+      }
+    }
+    self.apiPut('/ISAPI/Security/adminAccesses', xml, function(err) {
+      if (err) return self.toast('Failed to save ports', 'err');
+      self.toast('Ports saved', 'ok');
+    });
+  },
+
+  // --- Video ---
+  loadVideoStream: function(ch) {
+    var self = this;
+    self._currentCh = ch;
+    // update stream tab buttons
+    var btns = document.querySelectorAll('.stream-tab');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].classList.toggle('active', btns[i].getAttribute('data-ch') === String(ch));
+    }
+
+    // if already cached, show it
+    if (self._vidXml[ch]) {
+      self.populateVideoForm(ch);
+      self.showCfg('cfg-video');
+      return;
+    }
+
+    self.apiGet('/ISAPI/Streaming/channels/' + ch, function(err, xml) {
+      if (err) {
+        self.toast('Failed to load stream ' + ch, 'err');
+        self.showCfg('cfg-video');
+        return;
+      }
+      self._vidXml[ch] = xml;
+      self.populateVideoForm(ch);
+      self.showCfg('cfg-video');
+    });
+  },
+
+  populateVideoForm: function(ch) {
+    var self = this;
+    var xml = self._vidXml[ch];
+    if (!xml) return;
+    var w = self.xmlVal(xml, 'videoResolutionWidth');
+    var h = self.xmlVal(xml, 'videoResolutionHeight');
+    document.getElementById('vid-res').textContent = w + 'x' + h;
+    document.getElementById('vid-codec').value = self.xmlVal(xml, 'videoCodecType');
+    document.getElementById('vid-qtype').value = self.xmlVal(xml, 'videoQualityControlType');
+    var bitrate = self.xmlVal(xml, 'vbrUpperCap') || self.xmlVal(xml, 'constantBitRate');
+    document.getElementById('vid-bitrate').value = bitrate;
+    var fps = parseInt(self.xmlVal(xml, 'maxFrameRate')) || 2500;
+    document.getElementById('vid-fps').value = Math.round(fps / 100);
+    document.getElementById('vid-profile').value = self.xmlVal(xml, 'H264Profile') || 'main';
+  },
+
+  saveVideo: function() {
+    var self = this;
+    var ch = self._currentCh;
+    var xml = self._vidXml[ch];
+    if (!xml) return;
+    xml = self.xmlSet(xml, 'videoCodecType', document.getElementById('vid-codec').value);
+    xml = self.xmlSet(xml, 'videoQualityControlType', document.getElementById('vid-qtype').value);
+    var bitrate = document.getElementById('vid-bitrate').value;
     xml = self.xmlSet(xml, 'vbrUpperCap', bitrate);
     xml = self.xmlSet(xml, 'constantBitRate', bitrate);
-    xml = self.xmlSet(xml, 'maxFrameRate', parseInt(fps) * 100);
-    if (ch === 101) {
-      xml = self.xmlSet(xml, 'videoQualityControlType', document.getElementById('vid-main-qtype').value);
-      xml = self.xmlSet(xml, 'H264Profile', document.getElementById('vid-main-profile').value);
-    }
+    xml = self.xmlSet(xml, 'maxFrameRate', parseInt(document.getElementById('vid-fps').value) * 100);
+    xml = self.xmlSet(xml, 'H264Profile', document.getElementById('vid-profile').value);
     self.apiPut('/ISAPI/Streaming/channels/' + ch, xml, function(err) {
-      if (err) return self.toast('Failed to save video config', 'err');
-      self.toast('Video config saved', 'ok');
+      if (err) return self.toast('Failed to save stream ' + ch, 'err');
+      self._vidXml[ch] = null; // invalidate cache
+      self.toast('Stream ' + ch + ' saved', 'ok');
     });
   },
 
-  // Image
+  // --- Image ---
   loadImage: function() {
     var self = this;
     var loaded = 0;
-    var done = function() { if (++loaded >= 2) self.showCfg('cfg-image'); };
+    var total = 6;
+    var done = function() { if (++loaded >= total) self.showCfg('cfg-image'); };
 
     self.apiGet('/ISAPI/Image/channels/1/color', function(err, xml) {
       if (!err) {
-        self._imgColor = xml;
-        var fields = ['brightness', 'contrast', 'saturation'];
-        for (var i = 0; i < fields.length; i++) {
-          var v = self.xmlVal(xml, fields[i] + 'Level') || '50';
-          document.getElementById('img-' + fields[i]).value = v;
-          document.getElementById('img-' + fields[i] + '-val').textContent = v;
-        }
+        self._imgColorXml = xml;
+        var br = self.xmlVal(xml, 'brightnessLevel') || '50';
+        var co = self.xmlVal(xml, 'contrastLevel') || '50';
+        var sa = self.xmlVal(xml, 'saturationLevel') || '50';
+        document.getElementById('img-brightness').value = br;
+        document.getElementById('img-brightness-val').textContent = br;
+        document.getElementById('img-contrast').value = co;
+        document.getElementById('img-contrast-val').textContent = co;
+        document.getElementById('img-saturation').value = sa;
+        document.getElementById('img-saturation-val').textContent = sa;
+      }
+      done();
+    });
+
+    self.apiGet('/ISAPI/Image/channels/1/sharpness', function(err, xml) {
+      if (!err) {
+        self._imgSharpXml = xml;
+        var v = self.xmlVal(xml, 'SharpnessLevel') || '50';
+        document.getElementById('img-sharpness').value = v;
+        document.getElementById('img-sharpness-val').textContent = v;
+      }
+      done();
+    });
+
+    self.apiGet('/ISAPI/Image/channels/1/WDR', function(err, xml) {
+      if (!err) {
+        self._imgWdrXml = xml;
+        document.getElementById('img-wdr-mode').value = self.xmlVal(xml, 'mode') || 'close';
+        var lv = self.xmlVal(xml, 'WDRLevel') || '50';
+        document.getElementById('img-wdr-level').value = lv;
+        document.getElementById('img-wdr-level-val').textContent = lv;
       }
       done();
     });
 
     self.apiGet('/ISAPI/Image/channels/1/irCutFilter', function(err, xml) {
       if (!err) {
-        self._imgIR = xml;
-        var mode = self.xmlVal(xml, 'IrcutFilterType') || 'auto';
-        document.getElementById('img-ircut').value = mode;
+        self._imgIRXml = xml;
+        document.getElementById('img-ircut').value = self.xmlVal(xml, 'IrcutFilterType') || 'auto';
+      }
+      done();
+    });
+
+    self.apiGet('/ISAPI/Image/channels/1/ISPMode', function(err, xml) {
+      if (!err) {
+        self._imgISPXml = xml;
+        document.getElementById('img-isp-mode').value = self.xmlVal(xml, 'mode') || 'auto';
+      }
+      done();
+    });
+
+    self.apiGet('/ISAPI/Image/channels/1/imageFlip', function(err, xml) {
+      if (!err) {
+        self._imgFlipXml = xml;
+        document.getElementById('img-flip').value = self.xmlVal(xml, 'enabled') || 'false';
       }
       done();
     });
   },
 
-  saveImage: function() {
+  saveImageColor: function() {
     var self = this;
-    var xml = self._imgColor;
+    var xml = self._imgColorXml;
     if (!xml) return;
     xml = self.xmlSet(xml, 'brightnessLevel', document.getElementById('img-brightness').value);
     xml = self.xmlSet(xml, 'contrastLevel', document.getElementById('img-contrast').value);
     xml = self.xmlSet(xml, 'saturationLevel', document.getElementById('img-saturation').value);
     self.apiPut('/ISAPI/Image/channels/1/color', xml, function(err) {
-      if (err) return self.toast('Failed to save image settings', 'err');
-      self.toast('Image settings saved', 'ok');
+      if (err) return self.toast('Failed to save color settings', 'err');
+      self.toast('Color settings saved', 'ok');
+    });
+
+    // save sharpness in parallel
+    var sxml = self._imgSharpXml;
+    if (sxml) {
+      sxml = self.xmlSet(sxml, 'SharpnessLevel', document.getElementById('img-sharpness').value);
+      self.apiPut('/ISAPI/Image/channels/1/sharpness', sxml, function(err) {
+        if (err) self.toast('Failed to save sharpness', 'err');
+      });
+    }
+  },
+
+  saveWdr: function() {
+    var self = this;
+    var xml = self._imgWdrXml;
+    if (!xml) return;
+    xml = self.xmlSet(xml, 'mode', document.getElementById('img-wdr-mode').value);
+    xml = self.xmlSet(xml, 'WDRLevel', document.getElementById('img-wdr-level').value);
+    self.apiPut('/ISAPI/Image/channels/1/WDR', xml, function(err) {
+      if (err) return self.toast('Failed to save WDR', 'err');
+      self.toast('WDR saved', 'ok');
     });
   },
 
   saveIRCut: function() {
     var self = this;
-    var xml = self._imgIR;
+    var xml = self._imgIRXml;
     if (!xml) return;
     xml = self.xmlSet(xml, 'IrcutFilterType', document.getElementById('img-ircut').value);
     self.apiPut('/ISAPI/Image/channels/1/irCutFilter', xml, function(err) {
@@ -380,7 +624,284 @@ var App = {
     });
   },
 
-  // Time
+  saveISPMode: function() {
+    var self = this;
+    var xml = self._imgISPXml;
+    if (!xml) return;
+    xml = self.xmlSet(xml, 'mode', document.getElementById('img-isp-mode').value);
+    self.apiPut('/ISAPI/Image/channels/1/ISPMode', xml, function(err) {
+      if (err) return self.toast('Failed to save ISP mode', 'err');
+      self.toast('ISP mode saved', 'ok');
+    });
+  },
+
+  saveFlip: function() {
+    var self = this;
+    var xml = self._imgFlipXml;
+    if (!xml) return;
+    xml = self.xmlSet(xml, 'enabled', document.getElementById('img-flip').value);
+    self.apiPut('/ISAPI/Image/channels/1/imageFlip', xml, function(err) {
+      if (err) return self.toast('Failed to save flip', 'err');
+      self.toast('Flip saved', 'ok');
+    });
+  },
+
+  // --- OSD ---
+  loadOsd: function() {
+    var self = this;
+    self.apiGet('/ISAPI/System/Video/inputs/channels/1/overlays', function(err, xml) {
+      if (err) return self.toast('Failed to load OSD', 'err');
+      self._osdXml = xml;
+
+      // date/time overlay enabled
+      var dtBlock = xml.match(/<DateTimeOverlay>[\s\S]*?<\/DateTimeOverlay>/);
+      if (dtBlock) {
+        document.getElementById('osd-dt-enabled').value = self.xmlVal(dtBlock[0], 'enabled') || 'false';
+        document.getElementById('osd-date-style').value = self.xmlVal(dtBlock[0], 'dateStyle') || 'YYYY-MM-DD';
+        document.getElementById('osd-week').value = self.xmlVal(dtBlock[0], 'displayWeek') || 'false';
+      }
+
+      // channel name overlay
+      var chBlock = xml.match(/<channelNameOverlay>[\s\S]*?<\/channelNameOverlay>/);
+      if (chBlock) {
+        document.getElementById('osd-ch-enabled').value = self.xmlVal(chBlock[0], 'enabled') || 'false';
+      }
+
+      self.showCfg('cfg-osd');
+    });
+  },
+
+  saveOsd: function() {
+    var self = this;
+    var xml = self._osdXml;
+    if (!xml) return;
+
+    // date/time overlay
+    xml = xml.replace(/(<DateTimeOverlay>[\s\S]*?<enabled>)[^<]*(<\/enabled>)/, '$1' + document.getElementById('osd-dt-enabled').value + '$2');
+    xml = xml.replace(/(<DateTimeOverlay>[\s\S]*?<dateStyle>)[^<]*(<\/dateStyle>)/, '$1' + document.getElementById('osd-date-style').value + '$2');
+    xml = xml.replace(/(<DateTimeOverlay>[\s\S]*?<displayWeek>)[^<]*(<\/displayWeek>)/, '$1' + document.getElementById('osd-week').value + '$2');
+
+    // channel name overlay
+    xml = xml.replace(/(<channelNameOverlay>[\s\S]*?<enabled>)[^<]*(<\/enabled>)/, '$1' + document.getElementById('osd-ch-enabled').value + '$2');
+
+    self.apiPut('/ISAPI/System/Video/inputs/channels/1/overlays', xml, function(err) {
+      if (err) return self.toast('Failed to save OSD', 'err');
+      self.toast('OSD saved', 'ok');
+    });
+  },
+
+  // --- Audio ---
+  loadAudio: function() {
+    var self = this;
+    self.apiGet('/ISAPI/System/Audio/channels/1', function(err, xml) {
+      if (err) return self.toast('Failed to load audio', 'err');
+      self._audioXml = xml;
+      document.getElementById('audio-enabled').value = self.xmlVal(xml, 'enabled') || 'false';
+      self.showCfg('cfg-audio');
+    });
+  },
+
+  saveAudio: function() {
+    var self = this;
+    var xml = self._audioXml;
+    if (!xml) return;
+    xml = self.xmlSet(xml, 'enabled', document.getElementById('audio-enabled').value);
+    self.apiPut('/ISAPI/System/Audio/channels/1', xml, function(err) {
+      if (err) return self.toast('Failed to save audio', 'err');
+      self.toast('Audio saved', 'ok');
+    });
+  },
+
+  // --- Motion Detection ---
+  loadMotion: function() {
+    var self = this;
+    self.apiGet('/ISAPI/System/Video/inputs/channels/1/motionDetection', function(err, xml) {
+      if (err) return self.toast('Failed to load motion detection', 'err');
+      self._motionXml = xml;
+      document.getElementById('md-enabled').value = self.xmlVal(xml, 'enabled') || 'false';
+      var sens = self.xmlVal(xml, 'sensitivityLevel') || '50';
+      document.getElementById('md-sensitivity').value = sens;
+      document.getElementById('md-sensitivity-val').textContent = sens;
+      self.showCfg('cfg-motion');
+    });
+  },
+
+  saveMotion: function() {
+    var self = this;
+    var xml = self._motionXml;
+    if (!xml) return;
+    xml = self.xmlSet(xml, 'enabled', document.getElementById('md-enabled').value);
+    xml = self.xmlSet(xml, 'sensitivityLevel', document.getElementById('md-sensitivity').value);
+    self.apiPut('/ISAPI/System/Video/inputs/channels/1/motionDetection', xml, function(err) {
+      if (err) return self.toast('Failed to save motion detection', 'err');
+      self.toast('Motion detection saved', 'ok');
+    });
+  },
+
+  // --- PIR ---
+  loadPir: function() {
+    var self = this;
+    self.apiGet('/ISAPI/Event/triggers/PIR-1', function(err, xml) {
+      if (err) {
+        document.getElementById('pir-info').textContent = 'PIR not available or failed to load.';
+        self.showCfg('cfg-pir');
+        return;
+      }
+      var lines = [];
+      var enabled = self.xmlVal(xml, 'enabled');
+      lines.push('Enabled: ' + (enabled || 'N/A'));
+
+      // parse notification methods
+      var methods = xml.match(/<EventTriggerNotificationList>[\s\S]*?<\/EventTriggerNotificationList>/);
+      if (methods) {
+        var notifs = methods[0].match(/<EventTriggerNotification>[\s\S]*?<\/EventTriggerNotification>/g) || [];
+        for (var i = 0; i < notifs.length; i++) {
+          var ntype = self.xmlVal(notifs[i], 'notificationMethod');
+          var nrecv = self.xmlVal(notifs[i], 'notificationRecurrence');
+          if (ntype) lines.push('Method: ' + ntype + (nrecv ? ' (' + nrecv + ')' : ''));
+        }
+      }
+
+      document.getElementById('pir-info').innerHTML = lines.join('<br>');
+      self.showCfg('cfg-pir');
+    });
+  },
+
+  // --- Email ---
+  loadEmail: function() {
+    var self = this;
+    self.apiGet('/ISAPI/System/Network/mailing', function(err, xml) {
+      if (err) return self.toast('Failed to load email config', 'err');
+      self._emailXml = xml;
+
+      // sender
+      var senderBlock = xml.match(/<sender>[\s\S]*?<\/sender>/);
+      if (senderBlock) {
+        document.getElementById('em-sender').value = self.xmlVal(senderBlock[0], 'emailAddress') || '';
+      }
+
+      // smtp
+      document.getElementById('em-host').value = self.xmlVal(xml, 'hostName') || '';
+      document.getElementById('em-port').value = self.xmlVal(xml, 'portNo') || '';
+      document.getElementById('em-ssl').value = self.xmlVal(xml, 'enableSSL') || 'false';
+      document.getElementById('em-auth').value = self.xmlVal(xml, 'enableAuthorization') || 'false';
+      document.getElementById('em-account').value = self.xmlVal(xml, 'accountName') || '';
+
+      // receivers
+      var recvBlocks = xml.match(/<receiver>[\s\S]*?<\/receiver>/g) || [];
+      for (var i = 0; i < 3; i++) {
+        var addr = '';
+        if (recvBlocks[i]) addr = self.xmlVal(recvBlocks[i], 'emailAddress') || '';
+        document.getElementById('em-recv' + (i + 1)).value = addr;
+      }
+
+      // attachment snapshot
+      var snapMatch = xml.match(/<attachment>[\s\S]*?<snapshot>[\s\S]*?<enabled>([^<]*)/);
+      document.getElementById('em-snapshot').value = snapMatch ? snapMatch[1] : 'false';
+
+      self.showCfg('cfg-email');
+    });
+  },
+
+  saveEmail: function() {
+    var self = this;
+    var xml = self._emailXml;
+    if (!xml) return;
+
+    // sender email
+    xml = xml.replace(/(<sender>[\s\S]*?<emailAddress>)[^<]*(<\/emailAddress>)/, '$1' + document.getElementById('em-sender').value + '$2');
+
+    // smtp
+    xml = self.xmlSet(xml, 'hostName', document.getElementById('em-host').value);
+    xml = self.xmlSet(xml, 'portNo', document.getElementById('em-port').value);
+    xml = self.xmlSet(xml, 'enableSSL', document.getElementById('em-ssl').value);
+    xml = self.xmlSet(xml, 'enableAuthorization', document.getElementById('em-auth').value);
+    xml = self.xmlSet(xml, 'accountName', document.getElementById('em-account').value);
+
+    // receivers - replace each one in order
+    var recvIdx = 0;
+    xml = xml.replace(/<receiver>[\s\S]*?<\/receiver>/g, function(block) {
+      recvIdx++;
+      var addr = '';
+      if (recvIdx <= 3) addr = document.getElementById('em-recv' + recvIdx).value;
+      return block.replace(/(<emailAddress>)[^<]*(<\/emailAddress>)/, '$1' + addr + '$2');
+    });
+
+    // snapshot attachment
+    xml = xml.replace(/(<attachment>[\s\S]*?<snapshot>[\s\S]*?<enabled>)[^<]*(<\/enabled>)/, '$1' + document.getElementById('em-snapshot').value + '$2');
+
+    self.apiPut('/ISAPI/System/Network/mailing', xml, function(err) {
+      if (err) return self.toast('Failed to save email config', 'err');
+      self.toast('Email config saved', 'ok');
+    });
+  },
+
+  // --- FTP ---
+  loadFtp: function() {
+    var self = this;
+    self.apiGet('/ISAPI/System/Network/ftp', function(err, xml) {
+      if (err) return self.toast('Failed to load FTP config', 'err');
+      self._ftpXml = xml;
+      document.getElementById('ftp-enabled').value = self.xmlVal(xml, 'enabled') || 'false';
+      document.getElementById('ftp-ip').value = self.xmlVal(xml, 'ipAddress') || '';
+      document.getElementById('ftp-port').value = self.xmlVal(xml, 'portNo') || '21';
+      document.getElementById('ftp-user').value = self.xmlVal(xml, 'userName') || '';
+      document.getElementById('ftp-anon').value = self.xmlVal(xml, 'annoyftp') || 'false';
+      self.showCfg('cfg-ftp');
+    });
+  },
+
+  saveFtp: function() {
+    var self = this;
+    var xml = self._ftpXml;
+    if (!xml) return;
+    xml = self.xmlSet(xml, 'enabled', document.getElementById('ftp-enabled').value);
+    xml = self.xmlSet(xml, 'ipAddress', document.getElementById('ftp-ip').value);
+    xml = self.xmlSet(xml, 'portNo', document.getElementById('ftp-port').value);
+    xml = self.xmlSet(xml, 'userName', document.getElementById('ftp-user').value);
+    xml = self.xmlSet(xml, 'annoyftp', document.getElementById('ftp-anon').value);
+    self.apiPut('/ISAPI/System/Network/ftp', xml, function(err) {
+      if (err) return self.toast('Failed to save FTP config', 'err');
+      self.toast('FTP config saved', 'ok');
+    });
+  },
+
+  // --- DDNS ---
+  loadDdns: function() {
+    var self = this;
+    self.apiGet('/ISAPI/System/Network/DDNS', function(err, xml) {
+      if (err) return self.toast('Failed to load DDNS config', 'err');
+      self._ddnsXml = xml;
+      document.getElementById('ddns-enabled').value = self.xmlVal(xml, 'enabled') || 'false';
+      document.getElementById('ddns-provider').value = self.xmlVal(xml, 'provider') || '';
+      // server may be in hostName or serverAddress
+      var srv = self.xmlVal(xml, 'hostName') || self.xmlVal(xml, 'serverAddress') || '';
+      document.getElementById('ddns-server').value = srv;
+      document.getElementById('ddns-domain').value = self.xmlVal(xml, 'deviceDomainName') || '';
+      document.getElementById('ddns-user').value = self.xmlVal(xml, 'userName') || '';
+      self.showCfg('cfg-ddns');
+    });
+  },
+
+  saveDdns: function() {
+    var self = this;
+    var xml = self._ddnsXml;
+    if (!xml) return;
+    xml = self.xmlSet(xml, 'enabled', document.getElementById('ddns-enabled').value);
+    xml = self.xmlSet(xml, 'provider', document.getElementById('ddns-provider').value);
+    // try both hostName and serverAddress
+    var srv = document.getElementById('ddns-server').value;
+    xml = self.xmlSet(xml, 'hostName', srv);
+    xml = self.xmlSet(xml, 'serverAddress', srv);
+    xml = self.xmlSet(xml, 'deviceDomainName', document.getElementById('ddns-domain').value);
+    xml = self.xmlSet(xml, 'userName', document.getElementById('ddns-user').value);
+    self.apiPut('/ISAPI/System/Network/DDNS', xml, function(err) {
+      if (err) return self.toast('Failed to save DDNS config', 'err');
+      self.toast('DDNS config saved', 'ok');
+    });
+  },
+
+  // --- Time ---
   loadTime: function() {
     var self = this;
     var loaded = 0;
@@ -395,7 +916,7 @@ var App = {
       done();
     });
 
-    self.apiGet('/ISAPI/System/time/ntpServers', function(err, xml) {
+    self.apiGet('/ISAPI/System/time/ntpServers/1', function(err, xml) {
       if (!err) {
         self._ntpXml = xml;
         document.getElementById('time-ntp').value = self.xmlVal(xml, 'ipAddress') || '';
@@ -420,13 +941,13 @@ var App = {
     if (self._ntpXml) {
       total++;
       var nxml = self._ntpXml;
-      nxml = nxml.replace(/(<NTPServer[^>]*>[\s\S]*?<ipAddress>)[^<]*/, '$1' + document.getElementById('time-ntp').value);
+      nxml = self.xmlSet(nxml, 'ipAddress', document.getElementById('time-ntp').value);
       nxml = self.xmlSet(nxml, 'synchronizeInterval', document.getElementById('time-interval').value);
       self.apiPut('/ISAPI/System/time/ntpServers/1', nxml, function(err) { if (err) errs++; checkDone(); });
     }
   },
 
-  // Users
+  // --- Users ---
   loadUsers: function() {
     var self = this;
     document.getElementById('user-name').textContent = self.user;
@@ -461,6 +982,50 @@ var App = {
     });
   },
 
+  // --- Device Name ---
+  loadDevName: function() {
+    var self = this;
+    self.apiGet('/ISAPI/System/Video/inputs/channels/1', function(err, xml) {
+      if (err) return self.toast('Failed to load device name', 'err');
+      self._devChXml = xml;
+      document.getElementById('devname-input').value = self.xmlVal(xml, 'name') || '';
+      self.showCfg('cfg-devname');
+    });
+  },
+
+  saveDevName: function() {
+    var self = this;
+    var name = document.getElementById('devname-input').value;
+    if (!name) return self.toast('Name cannot be empty', 'err');
+
+    var saved = 0;
+    var errs = 0;
+    var checkDone = function() {
+      if (++saved >= 2) {
+        if (errs) return self.toast('Failed to save device name', 'err');
+        document.getElementById('cam-name').textContent = name;
+        document.title = name;
+        self.toast('Device name saved', 'ok');
+      }
+    };
+
+    // update channel name
+    var chXml = self._devChXml;
+    if (chXml) {
+      chXml = self.xmlSet(chXml, 'name', name);
+      self.apiPut('/ISAPI/System/Video/inputs/channels/1', chXml, function(err) { if (err) errs++; checkDone(); });
+    } else {
+      saved++;
+    }
+
+    // update deviceInfo deviceName
+    self.apiGet('/ISAPI/System/deviceInfo', function(err, xml) {
+      if (err) { errs++; return checkDone(); }
+      xml = self.xmlSet(xml, 'deviceName', name);
+      self.apiPut('/ISAPI/System/deviceInfo', xml, function(err2) { if (err2) errs++; checkDone(); });
+    });
+  },
+
   // --- System ---
   initSystem: function() {
     var self = this;
@@ -476,6 +1041,35 @@ var App = {
         html += '<tr><td>' + fields[i][0] + '</td><td>' + self.xmlVal(xml, fields[i][1]) + '</td></tr>';
       }
       document.getElementById('sys-info').innerHTML = html;
+    });
+
+    // load storage
+    self.apiGet('/ISAPI/ContentMgmt/Storage', function(err, xml) {
+      var el = document.getElementById('sys-storage');
+      if (err) {
+        el.textContent = 'No storage device';
+        return;
+      }
+      var hdds = xml.match(/<hdd>[\s\S]*?<\/hdd>/g) || [];
+      if (hdds.length === 0) {
+        el.textContent = 'No storage device';
+        return;
+      }
+      var html = '';
+      for (var i = 0; i < hdds.length; i++) {
+        var hdd = hdds[i];
+        var id = self.xmlVal(hdd, 'id');
+        var name = self.xmlVal(hdd, 'hddName') || ('Storage ' + id);
+        var status = self.xmlVal(hdd, 'status') || 'unknown';
+        var cap = self.xmlVal(hdd, 'capacity');
+        var free = self.xmlVal(hdd, 'freeSpace');
+        html += '<div>' + self.esc(name) + ': ' + status;
+        if (cap) html += ' (' + cap + ' MB total';
+        if (free) html += ', ' + free + ' MB free';
+        if (cap) html += ')';
+        html += '</div>';
+      }
+      el.innerHTML = html;
     });
   },
 
@@ -587,6 +1181,14 @@ var App = {
       };
     }
 
+    // Stream tabs (video config)
+    var stabs = document.querySelectorAll('.stream-tab');
+    for (var i = 0; i < stabs.length; i++) {
+      stabs[i].onclick = function() {
+        self.loadVideoStream(parseInt(this.getAttribute('data-ch')));
+      };
+    }
+
     // Live controls
     document.getElementById('btn-stream-toggle').onclick = function() { self.toggleStream(); };
     document.getElementById('btn-capture').onclick = function() { self.capture(); };
@@ -595,13 +1197,10 @@ var App = {
       if (self.streaming) { self.stopStream(); self.startStream(); }
     };
 
-    // Image sliders - update value display
-    var sliders = ['brightness', 'contrast', 'saturation'];
-    for (var i = 0; i < sliders.length; i++) {
-      (function(name) {
-        var el = document.getElementById('img-' + name);
-        if (el) el.oninput = function() { document.getElementById('img-' + name + '-val').textContent = this.value; };
-      })(sliders[i]);
+    // Bind all sliders
+    var sliderIds = ['img-brightness', 'img-contrast', 'img-saturation', 'img-sharpness', 'img-wdr-level', 'md-sensitivity'];
+    for (var i = 0; i < sliderIds.length; i++) {
+      self.bindSlider(sliderIds[i]);
     }
 
     // Restore session
