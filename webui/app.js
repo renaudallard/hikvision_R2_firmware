@@ -342,7 +342,7 @@ var App = {
       }
       document.getElementById('wifi-status').textContent = '';
       var rows = '';
-      var aps = xml.match(/<accessPoint>[\s\S]*?<\/accessPoint>/g) || [];
+      var aps = xml.match(/<accessPoint[^>]*>[\s\S]*?<\/accessPoint>/g) || [];
       for (var i = 0; i < aps.length; i++) {
         var ap = aps[i];
         var ssid = self.xmlVal(ap, 'ssid');
@@ -413,7 +413,7 @@ var App = {
     self.apiGet('/ISAPI/Security/adminAccesses', function(err, xml) {
       if (err) return self.toast('Failed to load ports', 'err');
       self._portsXml = xml;
-      var protos = xml.match(/<AdminAccessProtocol>[\s\S]*?<\/AdminAccessProtocol>/g) || [];
+      var protos = xml.match(/<AdminAccessProtocol[^>]*>[\s\S]*?<\/AdminAccessProtocol>/g) || [];
       for (var i = 0; i < protos.length; i++) {
         var proto = self.xmlVal(protos[i], 'protocol');
         var port = self.xmlVal(protos[i], 'portNo');
