@@ -56,6 +56,43 @@ After reboot, the new web UI is accessible from any browser at `http://CAMERA_IP
 | **Device Name** | Rename camera |
 | **System** | Device info, firmware upgrade with progress bar, config backup/restore, reboot, storage |
 
+### Manual install via telnet (R0, Chinese firmware, older cameras)
+
+If the firmware upgrade via ISAPI is rejected (e.g. Chinese firmware, old versions), the web UI can be installed directly via telnet. The R0 platform stores IEfile.tar.gz as a flat file on flash, not inside CramFS.
+
+1. Enable telnet:
+   ```sh
+   curl -u 'admin:PASSWORD' -X PUT "http://CAMERA_IP/ISAPI/System/Network/telnetd" \
+     -d '<?xml version="1.0"?><Telnetd><enabled>true</enabled></Telnetd>' \
+     -H "Content-Type: application/xml"
+   ```
+
+2. If on Chinese firmware, patch the language byte to English:
+   ```sh
+   # Telnet in (common passwords: admin password, root/12345, root/hik2016)
+   nanddump -obf /tmp/mtd6copy /dev/mtd6
+   echo -ne '\x01' | dd of=/tmp/mtd6copy bs=1 seek=16 count=1 conv=notrunc
+   dd if=/tmp/mtd6copy of=/dev/mtdblock6
+   reboot
+   ```
+
+3. Build a **gzip** IEfile.tar.gz (R0 uses gzip, not LZMA):
+   ```sh
+   cd webui
+   tar czf IEfile.tar.gz index.asp style.css app.js
+   ```
+
+4. Transfer and install via TFTP:
+   ```sh
+   # On your machine: serve the file
+   python3 -m py_compile  # or any TFTP server on port 69
+
+   # On the camera via telnet:
+   tftp -g -r IEfile.tar.gz -l /dav/IEfile.tar.gz YOUR_IP 69
+   sync
+   reboot
+   ```
+
 ## Other Firmware Changes
 
 - **WiFi watchdog** - pings gateway every 30s, restarts networking after 3 failures, disables RTL8188EU power saving (IPS/LPS)
@@ -63,9 +100,10 @@ After reboot, the new web UI is accessible from any browser at `http://CAMERA_IP
 
 ## Compatibility
 
-**Two platforms supported:**
+**Three platforms supported:**
 - **IPC R2** (Hi3518E, 2MP) - 145 device IDs: DS-2CD20xx, DS-2CD21xx, DS-2CD24xx, DS-2CD26xx, DS-2CDxx42, etc.
 - **IPC R0** (Hi3516C, 3MP+) - DS-2CD2x32 series, DS-2CD2332-I, DS-2CD2132-I, etc.
+- **IPC R0 Chinese firmware** - same models with Chinese firmware. Requires telnet access to patch the language byte and replace IEfile.tar.gz (see below).
 
 **NVR/VMS** - RTSP, ONVIF, and ISAPI are untouched. Works normally with **Synology Surveillance Station**, **Blue Iris**, and any other NVR/VMS.
 
@@ -108,15 +146,18 @@ vi cramfs_root/initrun.sh
 
 ## IEfile.tar.gz (web UI packaging)
 
-Despite the `.gz` extension, this file is LZMA-compressed. Two critical constraints:
+Despite the `.gz` extension, the compression format depends on the platform:
 
-- **Bare paths only** (no `./` prefix) or the camera silently fails to extract
-- **LZMA dictionary 8MB max** (the camera has 64MB RAM total)
-
-```sh
-cd webui
-tar cf - index.asp style.css app.js | xz --format=lzma --lzma1=dict=8MiB,lc=3,lp=0,pb=2 > IEfile.tar.gz
-```
+- **IPC R2**: LZMA-compressed. Bare paths only (no `./` prefix), dictionary 8MB max.
+  ```sh
+  cd webui
+  tar cf - index.asp style.css app.js | xz --format=lzma --lzma1=dict=8MiB,lc=3,lp=0,pb=2 > IEfile.tar.gz
+  ```
+- **IPC R0**: Standard gzip.
+  ```sh
+  cd webui
+  tar czf IEfile.tar.gz index.asp style.css app.js
+  ```
 
 ## Building the Modified Firmware
 

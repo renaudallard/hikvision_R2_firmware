@@ -31,13 +31,15 @@ cd "$SCRIPT_DIR"
 
 # Detect firmware type: CramFS (R2) or flat files (R0)
 if [ -f "$WORK/unpacked/app.img" ]; then
-    echo "Detected CramFS firmware (IPC R2)"
+    echo "Detected CramFS firmware (IPC R2) - using LZMA"
     /usr/sbin/fsck.cramfs --extract="$WORK/cramfs" "$WORK/unpacked/app.img"
     cp "$WORK/ie_new.tar.gz" "$WORK/cramfs/IEfile.tar.gz"
     /usr/sbin/mkfs.cramfs -n r2_app "$WORK/cramfs" "$WORK/unpacked/app.img"
 elif [ -f "$WORK/unpacked/IEfile.tar.gz" ]; then
-    echo "Detected flat firmware (IPC R0/R6)"
-    cp "$WORK/ie_new.tar.gz" "$WORK/unpacked/IEfile.tar.gz"
+    echo "Detected flat firmware (IPC R0/R6) - using gzip"
+    cd "$WORK/iefiles"
+    tar czf "$WORK/unpacked/IEfile.tar.gz" $(ls)
+    cd "$SCRIPT_DIR"
 else
     echo "Error: no app.img or IEfile.tar.gz found in unpacked firmware"
     exit 1
