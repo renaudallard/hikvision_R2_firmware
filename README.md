@@ -7,7 +7,7 @@ Modern web interface and firmware toolkit for Hikvision IPC R2 cameras.
 
 Replaces the original Internet Explorer-only ActiveX interface with a clean, dark-themed web UI that works on **any modern browser**. Pre-built firmware ready to flash on stock cameras.
 
-Tested on **DS-2CD2420F-IW** (V5.4.800). Should work on other IPC R2 models using the SWKH firmware format.
+Tested on **DS-2CD2420F-IW** (V5.4.800). The firmware is compatible with **all 145 IPC R2 models** including DS-2CD2020F, DS-2CD2120F, DS-2CD2420F-IW, DS-2CD2620F, DS-2CD2x32, DS-2CD2x42 series, and more.
 
 ---
 
@@ -54,9 +54,11 @@ After reboot, the new web UI is accessible from any browser at `http://CAMERA_IP
 - **WiFi watchdog** - pings gateway every 30s, restarts networking after 3 failures, disables RTL8188EU power saving (IPS/LPS)
 - **Smaller image** - removed unused language packs and ActiveX installers
 
-## NVR Compatibility
+## Compatibility
 
-RTSP, ONVIF, and ISAPI are untouched. The camera works normally with **Synology Surveillance Station**, **Blue Iris**, and any other NVR/VMS.
+**145 camera models** - Hikvision ships one firmware for the entire IPC R2 platform. The `_cfgUpgClass` compatibility table in this firmware covers 145 device IDs across all R2 series (DS-2CD20xx, DS-2CD21xx, DS-2CD24xx, DS-2CD26xx, DS-2CDxx32, DS-2CDxx42, etc.).
+
+**NVR/VMS** - RTSP, ONVIF, and ISAPI are untouched. Works normally with **Synology Surveillance Station**, **Blue Iris**, and any other NVR/VMS.
 
 ---
 
