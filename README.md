@@ -11,7 +11,7 @@ Tested on **DS-2CD2420F-IW** (V5.4.800). Should work on other IPC R2 models usin
 
 ---
 
-# Part 1: Modified Firmware
+# ![#3b82f6](https://placehold.co/12x12/3b82f6/3b82f6.png) Modified Firmware
 
 ## Download and Flash
 
@@ -60,7 +60,7 @@ RTSP, ONVIF, and ISAPI are untouched. The camera works normally with **Synology 
 
 ---
 
-# Part 2: Firmware Toolkit
+# ![#22c55e](https://placehold.co/12x12/22c55e/22c55e.png) Firmware Toolkit
 
 `hikfw.py` is a standalone tool to unpack, inspect, modify, resign, and repack Hikvision SWKH firmware files. It works independently of the web UI project above.
 
@@ -139,7 +139,7 @@ The kernel (`uImage`) is never modified.
 
 ---
 
-# Recovery
+# ![#ef4444](https://placehold.co/12x12/ef4444/ef4444.png) Recovery
 
 The DS-2CD2420F-IW has **no UART pin headers**. There is a hidden screw behind the Hikvision sticker on the back.
 
@@ -182,7 +182,7 @@ Requires a full flash image (all partitions including u-boot), not just `digicap
 
 ---
 
-# Firmware Format Reference
+# ![#9ca3af](https://placehold.co/12x12/9ca3af/9ca3af.png) Firmware Format Reference
 
 <details>
 <summary>SWKH header (240 bytes, XOR encrypted)</summary>
