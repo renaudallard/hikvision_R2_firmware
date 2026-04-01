@@ -1,83 +1,70 @@
 # hikfw
 
-Modern web UI and firmware tools for Hikvision IPC R2 cameras.
+[![Latest Release](https://img.shields.io/github/v/release/renaudallard/hikvision_R2_firmware?label=firmware&color=blue)](https://github.com/renaudallard/hikvision_R2_firmware/releases/latest)
+[![License](https://img.shields.io/badge/license-public%20domain-green)](LICENSE)
 
-Replaces the original Internet Explorer-only ActiveX interface with a clean, modern web UI that works on any browser. Pre-built firmware ready to flash on stock cameras.
+Modern web interface and firmware toolkit for Hikvision IPC R2 cameras.
+
+Replaces the original Internet Explorer-only ActiveX interface with a clean, dark-themed web UI that works on **any modern browser**. Pre-built firmware ready to flash on stock cameras.
 
 Tested on **DS-2CD2420F-IW** (V5.4.800). Should work on other IPC R2 models using the SWKH firmware format.
 
 ---
 
-## New Web UI
+# Part 1: Modified Firmware
 
-| | |
-|---|---|
+## Download and Flash
+
+Download `digicap.dav` from the **[Releases](https://github.com/renaudallard/hikvision_R2_firmware/releases/latest)** page, then flash using one of:
+
+| Method | Steps |
+|--------|-------|
+| **Stock Hikvision UI** (IE) | Configuration > System > Maintenance > Upgrade, select file, click Upgrade |
+| **New web UI** (any browser) | System > Firmware Upgrade, select file, click Upload and Upgrade |
+| **Command line** | `curl -u 'admin:PASSWORD' -X PUT "http://CAMERA_IP/ISAPI/System/updateFirmware" --data-binary @digicap.dav` |
+
+After reboot, the new web UI is accessible from any browser at `http://CAMERA_IP/`.
+
+> **Warning:** A bad firmware bricks the camera and requires [TFTP recovery](#tftp-recovery).
+
+## New Web UI Features
+
+| Section | Details |
+|---------|---------|
 | **Live View** | Real-time JPEG snapshot stream, main/sub stream selector, screenshot capture, fullscreen |
 | **Network** | IP address, DHCP/static, subnet, gateway, DNS |
-| **WiFi** | Scan available networks with signal strength, connect with password |
+| **WiFi** | Scan networks with signal strength bars, connect with password |
 | **Ports** | HTTP, HTTPS, RTSP, SDK port configuration |
 | **Video** | 3 streams (main/sub/third), codec, bitrate, frame rate, H.264 profile, quality type |
-| **Image** | Brightness, contrast, saturation, sharpness sliders, WDR mode and level, IR cut filter (auto/day/night), ISP day/night mode, mirror/flip |
+| **Image** | Brightness, contrast, saturation, sharpness sliders, WDR, IR cut filter, ISP day/night, mirror/flip |
 | **OSD** | Date/time overlay, date format, display week, channel name overlay |
 | **Audio** | Enable/disable audio channel |
 | **Motion Detection** | Enable/disable, sensitivity slider |
-| **PIR** | PIR sensor status and notification methods |
-| **Email** | SMTP server, SSL/TLS, authentication, sender, 3 receivers, snapshot attachment |
-| **FTP** | FTP upload server, port, credentials, anonymous mode |
-| **DDNS** | Dynamic DNS provider, server, domain, credentials |
-| **Time** | NTP or manual, NTP server address, sync interval |
+| **PIR** | Sensor status and notification methods |
+| **Email** | SMTP server, SSL/TLS, auth, sender, 3 receivers, snapshot attachment |
+| **FTP** | Upload server, port, credentials, anonymous mode |
+| **DDNS** | Provider, server, domain, credentials |
+| **Time** | NTP or manual, NTP server, sync interval |
 | **Users** | Change admin password |
-| **Device Name** | Rename camera (updates channel name and device info) |
-| **System** | Device info, firmware upgrade with progress bar, config backup/restore, reboot, storage status |
+| **Device Name** | Rename camera |
+| **System** | Device info, firmware upgrade with progress bar, config backup/restore, reboot, storage |
 
-**Dark theme, 3 files, 37KB total** (replaces the original 600+ file / 1.2MB AngularJS application).
+## Other Firmware Changes
 
-Works on **Firefox, Chrome, Safari, Edge**. No plugins required.
+- **WiFi watchdog** - pings gateway every 30s, restarts networking after 3 failures, disables RTL8188EU power saving (IPS/LPS)
+- **Smaller image** - removed unused language packs and ActiveX installers
 
----
+## NVR Compatibility
 
-## How to flash
-
-Download `digicap.dav` from the [Releases](https://github.com/renaudallard/hikvision_R2_firmware/releases) page.
-
-### From the stock Hikvision web UI (Internet Explorer)
-
-Go to **Configuration > System > Maintenance > Upgrade**, select `digicap.dav`, click Upgrade. After the camera reboots, you will have the new web UI accessible from any browser.
-
-### From the new web UI
-
-Go to **System > Firmware Upgrade**, select `digicap.dav`, click Upload and Upgrade.
-
-### From the command line
-
-```sh
-curl -u 'admin:PASSWORD' -X PUT \
-  "http://CAMERA_IP/ISAPI/System/updateFirmware" \
-  --data-binary @digicap.dav \
-  -H "Content-Type: application/octet-stream"
-```
-
-> **Warning:** A bad firmware bricks the camera and requires TFTP recovery. See [Recovery](#recovery).
+RTSP, ONVIF, and ISAPI are untouched. The camera works normally with **Synology Surveillance Station**, **Blue Iris**, and any other NVR/VMS.
 
 ---
 
-## Other firmware modifications
+# Part 2: Firmware Toolkit
 
-**WiFi watchdog** pings gateway every 30s, restarts networking after 3 failures, disables RTL8188EU power saving (IPS/LPS)
+`hikfw.py` is a standalone tool to unpack, inspect, modify, resign, and repack Hikvision SWKH firmware files. It works independently of the web UI project above.
 
-**Smaller firmware** by removing unused language packs and ActiveX installers
-
-### NVR compatibility
-
-RTSP, ONVIF, and ISAPI are untouched. The camera works normally with Synology Surveillance Station, Blue Iris, and any other NVR/VMS software.
-
----
-
-## Toolkit
-
-`hikfw.py` unpacks, repacks, and resigns Hikvision SWKH firmware files.
-
-### Install
+## Install
 
 ```sh
 git clone https://github.com/renaudallard/hikvision_R2_firmware.git
@@ -85,16 +72,16 @@ cd hikvision_R2_firmware
 pip install cryptography
 ```
 
-### Quick start
+## Usage
 
 ```sh
-python3 hikfw.py info digicap.dav        # inspect
-python3 hikfw.py unpack digicap.dav -o unpacked  # unpack
-python3 hikfw.py repack unpacked -o modified.dav  # repack (auto-resigns)
-python3 hikfw.py verify modified.dav     # verify signatures
+python3 hikfw.py info digicap.dav                   # inspect
+python3 hikfw.py unpack digicap.dav -o unpacked      # unpack
+python3 hikfw.py repack unpacked -o modified.dav      # repack (auto-resigns)
+python3 hikfw.py verify modified.dav                 # verify signatures
 ```
 
-### Modifying the CramFS
+## Modifying the CramFS
 
 ```sh
 # Extract
@@ -108,7 +95,7 @@ vi cramfs_root/initrun.sh
 /usr/sbin/mkfs.cramfs -n r2_app cramfs_root unpacked/app.img
 ```
 
-### IEfile.tar.gz (web UI)
+## IEfile.tar.gz (web UI packaging)
 
 Despite the `.gz` extension, this file is LZMA-compressed. Two critical constraints:
 
@@ -120,13 +107,9 @@ cd webui
 tar cf - index.asp style.css app.js | xz --format=lzma --lzma1=dict=8MiB,lc=3,lp=0,pb=2 > IEfile.tar.gz
 ```
 
----
+## Building the Modified Firmware
 
-## Building firmware
-
-The build script takes a base firmware and replaces the web UI.
-
-**Requirements:** `util-linux-extra` (cramfs tools), `xz-utils`, Python 3 + `cryptography`
+The build script takes a base firmware and replaces the web UI:
 
 ```sh
 # Download the base firmware (contains WiFi watchdog and other non-UI mods)
@@ -136,15 +119,13 @@ gh release download v0.0.0-base -p 'firmware_base.dav'
 ./build_firmware.sh firmware_base.dav digicap.dav
 ```
 
-### Automated releases
+**Requirements:** `util-linux-extra` (cramfs tools), `xz-utils`, Python 3 + `cryptography`
 
-A GitHub Actions workflow creates a release when `VERSION` changes. To release: bump `VERSION`, commit, push.
+A GitHub Actions workflow automatically creates a release when `VERSION` changes.
 
----
+## Web UI Source
 
-## Web UI source
-
-Source files in `webui/`:
+Source in `webui/` (vanilla JS, no frameworks, no build step):
 
 | File | Description |
 |------|-------------|
@@ -152,17 +133,17 @@ Source files in `webui/`:
 | `style.css` | Dark theme, CSS Grid |
 | `app.js` | Application logic, ISAPI communication, live view |
 
-The UI communicates with the camera via ISAPI (XML over HTTP with Digest auth). Video is displayed by polling `/ISAPI/Streaming/channels/{id}/picture` for JPEG snapshots via XHR.
+The UI talks to the camera via ISAPI (XML over HTTP with Digest auth). Live view polls `/ISAPI/Streaming/channels/{id}/picture` for JPEG snapshots via XHR.
 
 The kernel (`uImage`) is never modified.
 
 ---
 
-## Recovery
+# Recovery
 
 The DS-2CD2420F-IW has **no UART pin headers**. There is a hidden screw behind the Hikvision sticker on the back.
 
-### TFTP recovery
+## TFTP Recovery
 
 The Hi3518E u-boot has built-in TFTP recovery that works even with a corrupted kernel or CramFS.
 
@@ -189,7 +170,7 @@ The address pair is hardcoded in u-boot and varies by model. Use `tcpdump -i eth
 
 The camera uses a proprietary handshake on UDP 9978/9979 before standard TFTP (port 69). The included `hikvision_tftpd.py` (based on [scottlamb/hikvision-tftpd](https://github.com/scottlamb/hikvision-tftpd)) handles both.
 
-### SPI flash programmer (last resort)
+## SPI Flash Programmer (last resort)
 
 ```sh
 sudo apt install flashrom
@@ -201,9 +182,10 @@ Requires a full flash image (all partitions including u-boot), not just `digicap
 
 ---
 
-## Firmware format
+# Firmware Format Reference
 
-### SWKH header (240 bytes, XOR encrypted)
+<details>
+<summary>SWKH header (240 bytes, XOR encrypted)</summary>
 
 | Offset | Size | Field |
 |--------|------|-------|
@@ -222,7 +204,10 @@ Requires a full flash image (all partitions including u-boot), not just `digicap
 
 XOR key: `BA CD BC FE D6 CA DD D3 BA B9 A3 AB BF CB B5 BE`, index: `(i + (i >> 4)) & 0xF`
 
-### _cfgUpgSecPls signature
+</details>
+
+<details>
+<summary>_cfgUpgSecPls signature</summary>
 
 | Layer | Algorithm | Details |
 |-------|-----------|---------|
@@ -233,7 +218,10 @@ XOR key: `BA CD BC FE D6 CA DD D3 BA B9 A3 AB BF CB B5 BE`, index: `(i + (i >> 4
 | Hashes | SHA-0 | Not SHA-1. Old OpenSSL `SHA_Init` implements SHA-0. |
 | RSA | Stub | Always returns 0 |
 
-### Firmware layout
+</details>
+
+<details>
+<summary>Firmware layout</summary>
 
 ```
 Offset     Size       Section
@@ -244,9 +232,11 @@ Offset     Size       Section
 0x3586CC   ~7 MB      app.img (CramFS application filesystem)
 ```
 
+</details>
+
 ---
 
-## Platform reference
+## Platform Reference
 
 See [INTERNALS.md](INTERNALS.md) for detailed notes on the camera hardware, boot sequence, initramfs, SSH/firewall architecture, and cross-compilation.
 
