@@ -59,19 +59,19 @@ vi cramfs_root/initrun.sh
 truncate -s 10747904 unpacked/app.img
 ```
 
-CramFS has a flat structure (all files in root, no subdirectories). The rebuilt image must match the original size exactly (10,747,904 bytes). CramFS reads size from its superblock and ignores trailing zeros, so zero-padding is safe.
+CramFS has a flat structure (all files in root, no subdirectories). CramFS reads size from its superblock and ignores trailing zeros, so the rebuilt image does not need to match the original size exactly.
 
-`IEfile.tar.gz` contains the web UI. Despite the `.gz` extension, it is LZMA-compressed. Extracted on camera by `tar zxf ... --lzma`. When rebuilding: `tar cf - doc codebase dispatch.asp favicon.ico index.asp | lzma -9 > IEfile.tar.gz`. Do NOT use `tar cf - .` as the `./` prefix in paths breaks the web server.
+`IEfile.tar.gz` contains the web UI. Despite the `.gz` extension, it is LZMA-compressed. Extracted on camera by `tar zxf ... --lzma`. When rebuilding, use bare paths (no `./` prefix) and LZMA with 8MB dictionary max: `cd webui && tar cf - index.asp style.css app.js favicon.ico | xz --format=lzma --lzma1=dict=8MiB,lc=3,lp=0,pb=2 > IEfile.tar.gz`. Using `tar cf - .` (with `./` prefix) or `lzma -9` (64MB dictionary) will silently fail on the camera.
 
 ### Freeing space in the CramFS
 
-The CramFS image is fixed-size (10,747,904 bytes). To add new files (e.g. a custom dropbear binary), you need to free space first. Candidates:
+To add new files (e.g. a custom dropbear binary), you can free space by removing unnecessary files. Candidates:
 
 | File | Size | Description |
 |------|------|-------------|
-| `WebComponents.exe` | 2.4 MB | ActiveX installer for IE. Useless on modern browsers. Safe to delete. |
+| `WebComponents.exe` | 2.4 MB | ActiveX installer for IE. Already removed in modified firmware. |
 | `IEfile.tar.gz` translations | ~300 KB | 26 non-English language packs in `doc/i18n/`. English is NOT in this directory (it comes from `IElang.tar`). Delete the language directories and update `doc/i18n/Languages.json` to `{"Languages":[{"isDefault":true,"name":"English","value":"en"}]}` |
-| `codebase/version.xml` | small | ActiveX version checker. Safe to delete. |
+| `codebase/version.xml` | small | ActiveX version checker. Already removed in modified firmware. |
 
 To strip translations from IEfile.tar.gz:
 
@@ -237,6 +237,39 @@ flashrom -p ch341a_spi -w good_dump.bin       # restore
 This requires a full flash image (all partitions including u-boot), not just a `digicap.dav`. Always dump the flash before making modifications.
 
 The original firmware is at `firmware_extracted/digicap.dav` (kernel + app only, no u-boot).
+
+## Web UI (modern browser, replaces original IE-only interface)
+
+The original firmware's web UI required Internet Explorer with ActiveX plugins. It has been completely replaced with a clean, modern single-page application that works in Firefox, Chrome, Safari, and Edge.
+
+The new UI is 3 files totalling ~37KB (8KB compressed), replacing the original ~600-file / 1.2MB AngularJS+jQuery+SeaJS application.
+
+**Features:**
+- Live video preview via JPEG snapshot polling (main or sub stream selectable)
+- Screenshot capture (canvas-based, downloads as JPEG)
+- Fullscreen video
+- Configuration: network, video streams, image (brightness/contrast/saturation/IR), date/time (NTP), users
+- System: device info, firmware upgrade, config backup/restore, reboot
+- Session persistence (survives page reload)
+- Dark theme
+
+**Source files** (in `webui/` directory, packaged into `IEfile.tar.gz`):
+
+| File | Description |
+|------|-------------|
+| `index.asp` | HTML shell with all page layouts |
+| `style.css` | Dark theme with CSS Grid layout |
+| `app.js` | All application logic, ISAPI communication, live view |
+
+To rebuild `IEfile.tar.gz` from source:
+```sh
+cd webui
+tar cf - index.asp style.css app.js favicon.ico | xz --format=lzma --lzma1=dict=8MiB,lc=3,lp=0,pb=2 > IEfile.tar.gz
+```
+
+The LZMA dictionary must be 8MB or less (the camera has only 64MB RAM total). Bare paths without `./` prefix are required.
+
+The kernel (`uImage`) is never modified.
 
 ## Platform reference
 
