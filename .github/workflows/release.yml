@@ -38,7 +38,7 @@ jobs:
         if: steps.check.outputs.exists == 'false'
         run: |
           sudo apt-get update
-          sudo apt-get install -y cramfsprogs xz-utils
+          sudo apt-get install -y util-linux-extra xz-utils
           pip install cryptography
 
       - name: Download base firmware
