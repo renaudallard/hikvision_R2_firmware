@@ -4,6 +4,14 @@ Unpack, modify, resign, and repack Hikvision IPC R2 series firmware (`digicap.da
 
 Tested on **DS-2CD2420F-IW** (V5.4.800 build 210813). Should work on other IPC R2 models using the SWKH firmware format.
 
+## Modified firmware features
+
+Pre-built firmware is available on the [Releases](https://github.com/renaudallard/hikvision_R2_firmware/releases) page. Flash via curl (see below) or from the web UI under System > Firmware Upgrade.
+
+- **Modern web UI** replacing the original IE-only ActiveX interface. Works on Firefox, Chrome, Safari, Edge. Live view, 15 configuration sections, firmware upgrade, config backup/restore. See [Web UI](#web-ui-modern-browser-replaces-original-ie-only-interface) section.
+- **WiFi watchdog** that pings the gateway every 30s and restarts networking after 3 consecutive failures. Disables RTL8188EU power saving (IPS/LPS) which causes WiFi drops.
+- **Reduced firmware size** by removing unnecessary language packs and ActiveX installers.
+
 ## What it does
 
 ```
@@ -270,6 +278,24 @@ tar cf - index.asp style.css app.js favicon.ico | xz --format=lzma --lzma1=dict=
 The LZMA dictionary must be 8MB or less (the camera has only 64MB RAM total). Bare paths without `./` prefix are required.
 
 The kernel (`uImage`) is never modified.
+
+## Building firmware
+
+Requirements: `cramfsprogs`, `xz-utils`, Python 3 with `cryptography`.
+
+```sh
+# Download the base firmware (contains WiFi watchdog and other non-UI mods)
+gh release download v0.0.0-base -p 'firmware_base.dav'
+
+# Build (replaces web UI in the base firmware)
+./build_firmware.sh firmware_base.dav digicap.dav
+```
+
+## Releases
+
+A GitHub Actions workflow automatically creates a release when the `VERSION` file changes. The workflow downloads the base firmware, builds `IEfile.tar.gz` from `webui/`, rebuilds the CramFS, and repacks the firmware.
+
+To make a new release: bump `VERSION`, commit, push.
 
 ## Platform reference
 

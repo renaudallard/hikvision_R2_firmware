@@ -1,4 +1,5 @@
 var App = {
+  VERSION: '1.0.0',
   user: null,
   pass: null,
   streaming: false,
@@ -141,6 +142,7 @@ var App = {
       document.getElementById('cam-name').textContent = name;
       document.title = name;
       document.getElementById('login-model').textContent = model;
+      document.getElementById('login-version').textContent = 'v' + self.VERSION;
     });
   },
 
@@ -1040,6 +1042,7 @@ var App = {
       for (var i = 0; i < fields.length; i++) {
         html += '<tr><td>' + fields[i][0] + '</td><td>' + self.xmlVal(xml, fields[i][1]) + '</td></tr>';
       }
+      html += '<tr><td>Web UI</td><td>v' + self.VERSION + '</td></tr>';
       document.getElementById('sys-info').innerHTML = html;
     });
 

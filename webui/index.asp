@@ -13,6 +13,7 @@
   <form id="login-form" autocomplete="on">
     <h1>IP Camera</h1>
     <div id="login-model" class="login-model"></div>
+    <div id="login-version" class="login-model"></div>
     <input type="text" id="login-user" name="username" placeholder="Username" autocomplete="username" required>
     <input type="password" id="login-pass" name="password" placeholder="Password" autocomplete="current-password" required>
     <button type="submit">Log In</button>

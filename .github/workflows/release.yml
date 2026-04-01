@@ -1,0 +1,67 @@
+name: Build and Release Firmware
+
+on:
+  push:
+    paths:
+      - 'VERSION'
+    branches:
+      - main
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        run: echo "version=$(cat VERSION | tr -d '[:space:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Check if release already exists
+        id: check
+        run: |
+          if gh release view "v${{ steps.version.outputs.version }}" > /dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Skip if release exists
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          echo "Release v${{ steps.version.outputs.version }} already exists, skipping."
+          exit 0
+
+      - name: Install dependencies
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cramfsprogs xz-utils
+          pip install cryptography
+
+      - name: Download base firmware
+        if: steps.check.outputs.exists == 'false'
+        run: gh release download v0.0.0-base -p 'firmware_base.dav' -D .
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build firmware
+        if: steps.check.outputs.exists == 'false'
+        run: ./build_firmware.sh firmware_base.dav digicap.dav
+
+      - name: Create release
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          gh release create "v${{ steps.version.outputs.version }}" \
+            --title "v${{ steps.version.outputs.version }}" \
+            --notes "Firmware v${{ steps.version.outputs.version }}
+
+          Flash via web UI (System > Firmware Upgrade) or curl:
+          \`\`\`
+          curl -u 'admin:PASSWORD' -X PUT http://CAMERA_IP/ISAPI/System/updateFirmware --data-binary @digicap.dav
+          \`\`\`" \
+            digicap.dav
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

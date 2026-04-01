@@ -5,3 +5,4 @@ firmware_decompiled/
 modified_firmware/
 unpacked/
 __pycache__/
+.build/
