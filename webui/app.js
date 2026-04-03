@@ -175,60 +175,83 @@ var App = {
   startStream: function() {
     var self = this;
     var ch = document.getElementById('sel-stream').value;
+    var mode = document.getElementById('sel-mode').value;
     var img = document.getElementById('live-img');
+    var canvas = document.getElementById('live-canvas');
     var msg = document.getElementById('live-msg');
     self.streaming = true;
-    self.frameCount = 0;
-    self.lastFpsTime = Date.now();
     document.getElementById('btn-stream-toggle').textContent = 'Stop';
     msg.textContent = 'Connecting...';
 
-    var fetchFrame = function() {
-      if (!self.streaming) return;
-      var xhr = new XMLHttpRequest();
-      xhr.open('GET', self.apiUrl('/ISAPI/Streaming/channels/' + ch + '/picture?_=' + Date.now()), true);
-      xhr.responseType = 'blob';
-      xhr.onload = function() {
-        if (!self.streaming) return;
-        if (xhr.status >= 200 && xhr.status < 300) {
-          if (self._prevBlob) URL.revokeObjectURL(self._prevBlob);
-          var url = URL.createObjectURL(xhr.response);
-          self._prevBlob = url;
-          img.src = url;
-          img.style.display = 'block';
-          msg.style.display = 'none';
-          self.frameCount++;
-          self.streamTimer = setTimeout(fetchFrame, 100);
-        } else {
-          self.streamTimer = setTimeout(fetchFrame, 1000);
-        }
-      };
-      xhr.onerror = function() {
-        if (self.streaming) self.streamTimer = setTimeout(fetchFrame, 1000);
-      };
-      xhr.send();
-    };
-
-    self.fpsTimer = setInterval(function() {
-      var now = Date.now();
-      var elapsed = (now - self.lastFpsTime) / 1000;
-      var fps = elapsed > 0 ? (self.frameCount / elapsed).toFixed(1) : '0';
-      document.getElementById('live-fps').textContent = fps + ' fps';
+    if (mode === 'h264' && typeof RTSPStream !== 'undefined') {
+      img.style.display = 'none';
+      canvas.style.display = 'block';
+      self._rtspStream = new RTSPStream({
+        host: location.host,
+        user: self.user,
+        pass: self.pass,
+        channel: ch,
+        canvas: canvas,
+        onStatus: function(s) { if (s) msg.textContent = s; else msg.style.display = 'none'; },
+        onError: function(e) { msg.style.display = ''; msg.textContent = e; },
+        onFps: function(fps) { document.getElementById('live-fps').textContent = fps ? fps + ' fps' : ''; }
+      });
+      self._rtspStream.start();
+    } else {
+      canvas.style.display = 'none';
       self.frameCount = 0;
-      self.lastFpsTime = now;
-    }, 2000);
+      self.lastFpsTime = Date.now();
+      self._prevBlob = null;
 
-    fetchFrame();
+      var fetchFrame = function() {
+        if (!self.streaming) return;
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', self.apiUrl('/ISAPI/Streaming/channels/' + ch + '/picture?_=' + Date.now()), true);
+        xhr.responseType = 'blob';
+        xhr.onload = function() {
+          if (!self.streaming) return;
+          if (xhr.status >= 200 && xhr.status < 300) {
+            if (self._prevBlob) URL.revokeObjectURL(self._prevBlob);
+            var url = URL.createObjectURL(xhr.response);
+            self._prevBlob = url;
+            img.src = url;
+            img.style.display = 'block';
+            msg.style.display = 'none';
+            self.frameCount++;
+            self.streamTimer = setTimeout(fetchFrame, 100);
+          } else {
+            self.streamTimer = setTimeout(fetchFrame, 1000);
+          }
+        };
+        xhr.onerror = function() {
+          if (self.streaming) self.streamTimer = setTimeout(fetchFrame, 1000);
+        };
+        xhr.send();
+      };
+
+      self.fpsTimer = setInterval(function() {
+        var now = Date.now();
+        var elapsed = (now - self.lastFpsTime) / 1000;
+        var fps = elapsed > 0 ? (self.frameCount / elapsed).toFixed(1) : '0';
+        document.getElementById('live-fps').textContent = fps + ' fps';
+        self.frameCount = 0;
+        self.lastFpsTime = now;
+      }, 2000);
+
+      fetchFrame();
+    }
   },
 
   stopStream: function() {
     this.streaming = false;
+    if (this._rtspStream) { this._rtspStream.stop(); this._rtspStream = null; }
     clearTimeout(this.streamTimer);
     clearInterval(this.fpsTimer);
     this.streamTimer = null;
-    // Revoke blob and hide image so no broken image shows
     var img = document.getElementById('live-img');
     if (img) { img.style.display = 'none'; img.src = ''; }
+    var canvas = document.getElementById('live-canvas');
+    if (canvas) canvas.style.display = 'none';
     if (this._prevBlob) { URL.revokeObjectURL(this._prevBlob); this._prevBlob = null; }
     var msg = document.getElementById('live-msg');
     if (msg) { msg.style.display = ''; msg.textContent = 'Click Start to begin live view'; }
@@ -239,12 +262,20 @@ var App = {
   },
 
   capture: function() {
+    var canvas = document.getElementById('live-canvas');
     var img = document.getElementById('live-img');
-    if (!img.src || img.style.display === 'none') return;
+    var src;
+    if (canvas && canvas.style.display !== 'none' && canvas.width > 0) {
+      src = canvas;
+    } else if (img && img.src && img.style.display !== 'none') {
+      src = img;
+    } else {
+      return;
+    }
     var c = document.createElement('canvas');
-    c.width = img.naturalWidth;
-    c.height = img.naturalHeight;
-    c.getContext('2d').drawImage(img, 0, 0);
+    c.width = src.naturalWidth || src.width;
+    c.height = src.naturalHeight || src.height;
+    c.getContext('2d').drawImage(src, 0, 0);
     var a = document.createElement('a');
     a.href = c.toDataURL('image/jpeg', 0.95);
     a.download = 'capture_' + new Date().toISOString().replace(/[:.]/g, '-') + '.jpg';
@@ -1210,6 +1241,14 @@ var App = {
     document.getElementById('sel-stream').onchange = function() {
       if (self.streaming) { self.stopStream(); self.startStream(); }
     };
+
+    // Populate mode selector based on protocol
+    var modeSelect = document.getElementById('sel-mode');
+    if (location.protocol === 'http:') {
+      modeSelect.innerHTML = '<option value="h264">H.264 Stream</option><option value="jpeg">JPEG Snapshots</option>';
+    } else {
+      modeSelect.innerHTML = '<option value="jpeg">JPEG Snapshots</option>';
+    }
 
     // Bind all sliders
     var sliderIds = ['img-brightness', 'img-contrast', 'img-saturation', 'img-sharpness', 'img-wdr-level', 'md-sensitivity'];

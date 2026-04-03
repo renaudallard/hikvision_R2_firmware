@@ -24,6 +24,7 @@ python3 "$SCRIPT_DIR/hikfw.py" unpack "$BASE_FW" -o "$WORK/unpacked"
 
 # Build IEfile.tar.gz from webui/ source
 cp "$WEBUI_DIR/index.asp" "$WEBUI_DIR/style.css" "$WEBUI_DIR/app.js" "$WORK/iefiles/"
+cp "$WEBUI_DIR/rtsp.js" "$WEBUI_DIR/h264decoder.js" "$WORK/iefiles/"
 [ -f "$WEBUI_DIR/favicon.ico" ] && cp "$WEBUI_DIR/favicon.ico" "$WORK/iefiles/"
 cd "$WORK/iefiles"
 tar cf - $(ls) | xz --format=lzma --lzma1=dict=8MiB,lc=3,lp=0,pb=2 > "$WORK/ie_new.tar.gz"

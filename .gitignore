@@ -6,3 +6,5 @@ modified_firmware/
 unpacked/
 __pycache__/
 .build/
+emsdk/
+openh264/

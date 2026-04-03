@@ -38,7 +38,7 @@ After reboot, the new web UI is accessible from any browser at `http://CAMERA_IP
 
 | Section | Details |
 |---------|---------|
-| **Live View** | Real-time JPEG snapshot stream, main/sub stream selector, screenshot capture, fullscreen |
+| **Live View** | H.264 live stream via RTSP-over-HTTP tunnel (OpenH264 WASM decoder), JPEG snapshot fallback, main/sub stream selector, screenshot capture, fullscreen |
 | **Network** | IP address, DHCP/static, subnet, gateway, DNS |
 | **WiFi** | Scan networks with signal strength bars, connect with password |
 | **Ports** | HTTP, HTTPS, RTSP, SDK port configuration |

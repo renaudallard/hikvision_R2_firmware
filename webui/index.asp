@@ -40,6 +40,7 @@
     <section id="page-live" class="page-content">
       <div class="live-container">
         <div class="live-video">
+          <canvas id="live-canvas" style="display:none;max-width:100%;max-height:100%"></canvas>
           <img id="live-img" alt="Live View">
           <div id="live-msg" class="live-msg">Click Start to begin live view</div>
         </div>
@@ -49,6 +50,7 @@
             <option value="101">Main Stream</option>
             <option value="102" selected>Sub Stream</option>
           </select>
+          <select id="sel-mode"></select>
           <button id="btn-capture" class="btn">Capture</button>
           <button id="btn-fullscreen" class="btn">Fullscreen</button>
           <span id="live-fps" class="live-fps"></span>
@@ -407,6 +409,8 @@
   <div id="toast" class="toast hidden"></div>
 </div>
 
+<script src="h264decoder.js"></script>
+<script src="rtsp.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
