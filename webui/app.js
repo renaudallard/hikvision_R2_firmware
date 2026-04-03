@@ -1239,7 +1239,7 @@ var App = {
     document.getElementById('btn-capture').onclick = function() { self.capture(); };
     document.getElementById('btn-fullscreen').onclick = function() { self.fullscreen(); };
     document.getElementById('sel-stream').onchange = function() {
-      if (self.streaming) { self.stopStream(); self.startStream(); }
+      if (self.streaming) location.reload();
     };
 
     // Populate mode selector based on protocol

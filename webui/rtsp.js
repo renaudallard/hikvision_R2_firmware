@@ -124,8 +124,11 @@ var RTSPStream = (function() {
 
   RTSPStream.prototype.stop = function() {
     this.running = false;
+    // Send TEARDOWN before closing the tunnel so camera releases the session
+    if (this._teardown) { try { this._teardown(); } catch(e) {} }
     if (this._getXhr) { this._getXhr.abort(); this._getXhr = null; }
     this._decoder = null;
+    this._teardown = null;
     clearInterval(this.fpsTimer);
     this.onFps('');
   };
@@ -142,7 +145,6 @@ var RTSPStream = (function() {
     var realm = '', nonce = '', sessionId = '';
     var textBuf = '';
     var processedBytes = 0;
-
     function postRtsp(msg) {
       var xhr = new XMLHttpRequest();
       xhr.open('POST', authUrl + tunnelPath, true);
@@ -265,6 +267,9 @@ var RTSPStream = (function() {
         var sm = resp.match(/Session:\s*(\S+)/);
         if (sm) { sessionId = sm[1].split(';')[0].trim(); state = 'play'; self.onStatus('Starting...');
           postRtsp(rtspMsg('PLAY', rtspUri, digestAuth(self.user, self.pass, realm, nonce, 'PLAY', rtspUri) + '\r\nSession: ' + sessionId + '\r\nRange: npt=0.000-\r\n'));
+          self._teardown = function() {
+            postRtsp(rtspMsg('TEARDOWN', rtspUri, digestAuth(self.user, self.pass, realm, nonce, 'TEARDOWN', rtspUri) + '\r\nSession: ' + sessionId + '\r\n'));
+          };
         }
       } else if (state === 'play') {
         if (resp.indexOf('200 OK') > -1) { state = 'streaming'; self.onStatus(''); }
