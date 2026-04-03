@@ -183,12 +183,14 @@ var RTSPStream = (function() {
       for (var i = 0; i < newText.length; i++) bytes[i] = newText.charCodeAt(i) & 0xFF;
       processChunk(bytes);
 
-      // Prevent memory buildup
-      if (processedBytes > 10 * 1024 * 1024) {
+      // Prevent memory buildup: XHR responseText grows unbounded.
+      // Send TEARDOWN before reconnecting so camera releases the session.
+      if (processedBytes > 50 * 1024 * 1024) {
+        if (self._teardown) { try { self._teardown(); } catch(e) {} self._teardown = null; }
         getXhr.abort();
         processedBytes = 0;
         buffer = new Uint8Array(0);
-        if (self.running) self._connect();
+        if (self.running) setTimeout(function() { self._connect(); }, 1000);
       }
     };
 
