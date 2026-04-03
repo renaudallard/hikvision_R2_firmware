@@ -162,40 +162,40 @@ var RTSPStream = (function() {
     self.onStatus('Connecting...');
 
     // GET channel via XHR with credentials in URL.
-    // Use responseType='' (text) and read responseText incrementally via onprogress.
-    // Binary data arrives as latin1 characters (each byte 0-255 maps to a char code).
-    var getXhr = new XMLHttpRequest();
-    self._getXhr = getXhr;
-    getXhr.open('GET', authUrl + tunnelPath, true);
-    getXhr.setRequestHeader('x-sessioncookie', sessionCookie);
-    getXhr.setRequestHeader('Accept', 'application/x-rtsp-tunnelled');
-    getXhr.setRequestHeader('Pragma', 'no-cache');
-    getXhr.overrideMimeType('text/plain; charset=x-user-defined');
+    // responseText grows unbounded; recycle the XHR when it gets large.
+    function openGetXhr() {
+      var xhr = new XMLHttpRequest();
+      self._getXhr = xhr;
+      xhr.open('GET', authUrl + tunnelPath, true);
+      xhr.setRequestHeader('x-sessioncookie', sessionCookie);
+      xhr.setRequestHeader('Accept', 'application/x-rtsp-tunnelled');
+      xhr.setRequestHeader('Pragma', 'no-cache');
+      xhr.overrideMimeType('text/plain; charset=x-user-defined');
+      processedBytes = 0;
 
-    getXhr.onprogress = function() {
-      if (!self.running) return;
-      var text = getXhr.responseText;
-      if (text.length <= processedBytes) return;
-      var newText = text.substring(processedBytes);
-      processedBytes = text.length;
-      // Convert latin1 string to Uint8Array
-      var bytes = new Uint8Array(newText.length);
-      for (var i = 0; i < newText.length; i++) bytes[i] = newText.charCodeAt(i) & 0xFF;
-      processChunk(bytes);
+      xhr.onprogress = function() {
+        if (!self.running) return;
+        var text = xhr.responseText;
+        if (text.length <= processedBytes) return;
+        var newText = text.substring(processedBytes);
+        processedBytes = text.length;
+        var bytes = new Uint8Array(newText.length);
+        for (var i = 0; i < newText.length; i++) bytes[i] = newText.charCodeAt(i) & 0xFF;
+        processChunk(bytes);
 
-      // Prevent memory buildup: XHR responseText grows unbounded.
-      // Send TEARDOWN before reconnecting so camera releases the session.
-      if (processedBytes > 50 * 1024 * 1024) {
-        if (self._teardown) { try { self._teardown(); } catch(e) {} self._teardown = null; }
-        getXhr.abort();
-        processedBytes = 0;
-        buffer = new Uint8Array(0);
-        if (self.running) setTimeout(function() { self._connect(); }, 1000);
-      }
-    };
+        // Recycle XHR to free responseText memory.
+        // Same session cookie keeps the RTSP session alive.
+        if (processedBytes > 10 * 1024 * 1024) {
+          xhr.abort();
+          buffer = new Uint8Array(0);
+          if (self.running) openGetXhr();
+        }
+      };
 
-    getXhr.onerror = function() { if (self.running) self.onError('Connection lost'); };
-    getXhr.send();
+      xhr.onerror = function() { if (self.running) self.onError('Connection lost'); };
+      xhr.send();
+    }
+    openGetXhr();
 
     // Send DESCRIBE after a short delay to allow the GET tunnel to establish
     // (browser needs time to complete the Digest auth challenge-response)
