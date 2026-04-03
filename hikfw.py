@@ -133,6 +133,23 @@ def resign_secpls(secpls_data, file_entries):
     pt = bytearray(pt)
 
     file_count = struct.unpack('<I', pt[28:32])[0]
+    fe_names = set(n for n, d, o, s in file_entries)
+
+    # Remove entries for files that no longer exist
+    new_entries = bytearray()
+    new_count = 0
+    for i in range(file_count):
+        off = 0xcc + i * 76
+        name = pt[off:off + 32].split(b'\x00')[0].decode()
+        if name in fe_names:
+            new_entries += pt[off:off + 76]
+            new_count += 1
+
+    if new_count != file_count:
+        pt[0xcc:0xcc + file_count * 76] = b''
+        pt[0xcc:0xcc] = new_entries
+        struct.pack_into('<I', pt, 28, new_count)
+        file_count = new_count
 
     # Update total firmware size
     if file_entries:
