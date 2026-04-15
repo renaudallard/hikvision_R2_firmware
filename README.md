@@ -286,6 +286,28 @@ Offset     Size       Section
 
 </details>
 
+<details>
+<summary>IPC G0 platform (Hi3519v101) — research notes, not supported</summary>
+
+The G0 generation (DS-2CD7A26G0 and siblings) reuses the SWKH envelope scheme but is **not unpackable by `hikfw.py`**. Captured here for reference only.
+
+| Aspect | Value |
+|--------|-------|
+| SoC | Hi3519v101 |
+| Container magic | `02KH` (`0x30324B48`) — not `SWKH` |
+| Envelope XOR key | Identical to R0/R2 (`BA CD BC FE D6 CA DD D3 BA B9 A3 AB BF CB B5 BE`) |
+| Header decode | Works — reveals 15-char device ID at header offset 0x2C |
+| Payload | Real AES (entropy 8.000 bits/byte across whole file) |
+| AES key source | Hisilicon **Key Ladder** (`HI_MPI_CIPHER_KladEncryptKey`) backed by SoC OTP root |
+| Key extractable from flash? | **No** — wrapped blob is in U-Boot, but unwrap requires the live chip |
+| Update flow in U-Boot | XOR-decode header → RSA-verify components → flash as-is. No payload decrypt at update time. |
+| Boot-time decrypt | `load_kernel_sec` calls Klad + `HI_MPI_CIPHER_Decrypt` on sys partition |
+| NIST-looking constants in U-Boot | FIPS-197 public test vectors for the `aes_test` self-test command — not Hikvision keys |
+
+**Implication:** a raw NAND/SPI dump of a G0 camera gives you the XOR envelope key (same one `hikfw.py` already has) but **not** the AES content key. Recovering plaintext requires a UART/JTAG session on a live Hi3519v101 to capture the unwrapped working key from RAM.
+
+</details>
+
 ---
 
 ## Platform Reference
